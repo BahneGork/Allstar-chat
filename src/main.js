@@ -3,8 +3,12 @@ const path = require('path');
 const fs = require('fs');
 const os = require('os');
 
-// Set app name for Task Manager
+// Set app name for Task Manager (multiple methods for Windows compatibility)
 app.setName('AllStar');
+process.title = 'AllStar';
+if (process.platform === 'win32') {
+  app.setAppUserModelId('com.allstar.app');
+}
 
 // Process reduction flags
 app.commandLine.appendSwitch('disable-http-cache');
