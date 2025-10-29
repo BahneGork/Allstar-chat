@@ -1,7 +1,7 @@
 {
   "name": "allstar",
   "productName": "AllStar",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "description": "Lightweight all-in-one messenger for Windows - Messenger & Google Chat",
   "main": "src/main.js",
   "author": "Your Name",
