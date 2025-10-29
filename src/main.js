@@ -125,7 +125,22 @@ function createWindow() {
       mainWindow.hide();
     } else {
       saveBounds();
+      // Clean up webviews before closing
+      if (mainWindow && mainWindow.webContents) {
+        mainWindow.webContents.executeJavaScript(`
+          document.querySelectorAll('webview').forEach(wv => {
+            try {
+              wv.stop();
+              wv.remove();
+            } catch(e) {}
+          });
+        `).catch(() => {});
+      }
     }
+  });
+
+  mainWindow.on('closed', () => {
+    mainWindow = null;
   });
 
   // Open DevTools in development
@@ -193,13 +208,41 @@ app.on('activate', () => {
   }
 });
 
-app.on('before-quit', () => {
+app.on('before-quit', (event) => {
   app.isQuitting = true;
+
+  // Clean up all webviews
+  if (mainWindow && mainWindow.webContents && !mainWindow.isDestroyed()) {
+    mainWindow.webContents.executeJavaScript(`
+      document.querySelectorAll('webview').forEach(wv => {
+        try {
+          wv.stop();
+          wv.remove();
+        } catch(e) {}
+      });
+    `).catch(() => {});
+  }
 
   const settings = store.get('settings');
   if (settings.clearCacheOnExit) {
     const { session } = require('electron');
     session.defaultSession.clearCache();
     session.defaultSession.clearStorageData();
+  }
+});
+
+app.on('will-quit', () => {
+  // Remove all IPC handlers to prevent memory leaks
+  ipcMain.removeHandler('get-settings');
+  ipcMain.removeHandler('update-settings');
+  ipcMain.removeHandler('get-services');
+  ipcMain.removeHandler('update-services');
+  ipcMain.removeHandler('get-memory-info');
+});
+
+// Force quit all processes on exit
+app.on('quit', () => {
+  if (mainWindow) {
+    mainWindow = null;
   }
 });
