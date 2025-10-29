@@ -21,7 +21,7 @@
     "win": {
       "target": [
         {
-          "target": "portable",
+          "target": "nsis",
           "arch": [
             "x64"
           ]
@@ -29,6 +29,12 @@
       ],
       "artifactName": "${productName}-${version}.${ext}",
       "executableName": "AllStar"
+    },
+    "nsis": {
+      "oneClick": false,
+      "allowToChangeInstallationDirectory": true,
+      "createDesktopShortcut": true,
+      "createStartMenuShortcut": true
     },
     "files": [
       "src/**/*",
