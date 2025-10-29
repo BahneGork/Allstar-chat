@@ -3,6 +3,9 @@ const path = require('path');
 const fs = require('fs');
 const os = require('os');
 
+// Set app name for Task Manager
+app.setName('AllStar');
+
 // Memory optimization flags
 app.commandLine.appendSwitch('js-flags', '--max-old-space-size=512');
 app.commandLine.appendSwitch('disable-background-timer-throttling', 'false');
