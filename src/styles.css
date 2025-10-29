@@ -300,28 +300,26 @@ webview.active {
   color: #007acc;
 }
 
-.memory-comparison {
+.stat-subtitle {
+  font-size: 11px;
+  color: #666;
+  margin-top: 5px;
+}
+
+.memory-info {
   background: #3d3d3d;
   padding: 20px;
   border-radius: 6px;
 }
 
-.memory-comparison h3 {
+.memory-info h3 {
   font-size: 16px;
   font-weight: 600;
   margin-bottom: 15px;
   color: #fff;
 }
 
-.memory-comparison p {
+.memory-info p {
   margin-bottom: 10px;
   font-size: 14px;
-}
-
-.memory-comparison .savings {
-  margin-top: 15px;
-  padding-top: 15px;
-  border-top: 1px solid #4d4d4d;
-  color: #4caf50;
-  font-size: 16px;
 }

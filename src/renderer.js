@@ -258,17 +258,10 @@ async function updateMemoryStats() {
   const memoryInfo = await window.electron.getMemoryInfo();
 
   document.getElementById('total-memory').textContent = `${memoryInfo.app.rss} MB`;
+  document.getElementById('process-count').textContent = memoryInfo.app.processCount || '--';
   document.getElementById('heap-used').textContent = `${memoryInfo.app.heapUsed} MB`;
+  document.getElementById('current-usage').textContent = memoryInfo.app.rss;
   document.getElementById('system-free').textContent = `${memoryInfo.system.free} MB`;
-
-  const currentUsage = memoryInfo.app.rss;
-  const oldUsage = 2000; // Singelbox usage
-  const saved = oldUsage - currentUsage;
-  const percent = Math.round((saved / oldUsage) * 100);
-
-  document.getElementById('current-usage').textContent = currentUsage;
-  document.getElementById('memory-saved').textContent = saved > 0 ? saved : 0;
-  document.getElementById('savings-percent').textContent = percent > 0 ? percent : 0;
 }
 
 // Initialize on load

@@ -190,21 +190,23 @@
             <div class="stat-card">
               <h3>Total Memory</h3>
               <div id="total-memory" class="stat-value">-- MB</div>
+              <p class="stat-subtitle">All processes combined</p>
+            </div>
+            <div class="stat-card">
+              <h3>Process Count</h3>
+              <div id="process-count" class="stat-value">--</div>
+              <p class="stat-subtitle">Active processes</p>
             </div>
             <div class="stat-card">
               <h3>Heap Used</h3>
               <div id="heap-used" class="stat-value">-- MB</div>
-            </div>
-            <div class="stat-card">
-              <h3>System Free</h3>
-              <div id="system-free" class="stat-value">-- MB</div>
+              <p class="stat-subtitle">JavaScript memory</p>
             </div>
           </div>
-          <div class="memory-comparison">
-            <h3>Comparison</h3>
-            <p><strong>Your old app (Singelbox):</strong> ~2000 MB</p>
-            <p><strong>AllStar (current):</strong> <span id="current-usage">--</span> MB</p>
-            <p class="savings"><strong>Memory saved:</strong> <span id="memory-saved">--</span> MB (<span id="savings-percent">--</span>%)</p>
+          <div class="memory-info">
+            <h3>Memory Details</h3>
+            <p><strong>Current Usage:</strong> <span id="current-usage">--</span> MB</p>
+            <p><strong>System Memory Free:</strong> <span id="system-free">--</span> MB</p>
           </div>
         </div>
         <div class="modal-footer">

@@ -194,12 +194,20 @@ ipcMain.handle('get-memory-info', async () => {
   const processMemory = process.memoryUsage();
   const systemMemory = process.getSystemMemoryInfo();
 
+  // Get all process metrics (includes all Electron processes)
+  const allProcessMetrics = app.getAppMetrics();
+  const totalMemory = allProcessMetrics.reduce((total, process) => {
+    return total + (process.memory?.workingSetSize || 0);
+  }, 0);
+  const totalMemoryMB = Math.round(totalMemory / 1024); // Convert KB to MB
+
   return {
     app: {
-      rss: Math.round(processMemory.rss / 1024 / 1024), // MB
+      rss: totalMemoryMB, // Total memory across all processes
       heapUsed: Math.round(processMemory.heapUsed / 1024 / 1024), // MB
       heapTotal: Math.round(processMemory.heapTotal / 1024 / 1024), // MB
-      external: Math.round(processMemory.external / 1024 / 1024) // MB
+      external: Math.round(processMemory.external / 1024 / 1024), // MB
+      processCount: allProcessMetrics.length
     },
     system: {
       total: Math.round(systemMemory.total / 1024), // MB
