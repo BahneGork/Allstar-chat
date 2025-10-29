@@ -101,6 +101,7 @@ function createWebview(serviceId) {
   webview.setAttribute('nodeintegration', 'false');
   webview.setAttribute('plugins', 'false');
   webview.setAttribute('disablewebsecurity', 'false');
+  webview.setAttribute('webpreferences', 'contextIsolation=true,enableRemoteModule=false');
 
   // Event listeners
   webview.addEventListener('did-start-loading', () => {

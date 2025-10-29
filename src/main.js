@@ -6,6 +6,14 @@ const os = require('os');
 // Set app name for Task Manager
 app.setName('AllStar');
 
+// Process reduction flags
+app.commandLine.appendSwitch('disable-http-cache');
+app.commandLine.appendSwitch('disable-gpu-sandbox');
+app.commandLine.appendSwitch('disable-software-rasterizer');
+app.commandLine.appendSwitch('disable-dev-shm-usage');
+app.commandLine.appendSwitch('disable-features', 'OutOfBlinkCors,IsolateOrigins,site-per-process');
+app.commandLine.appendSwitch('disable-site-isolation-trials');
+
 // Memory optimization flags
 app.commandLine.appendSwitch('js-flags', '--max-old-space-size=512');
 app.commandLine.appendSwitch('disable-background-timer-throttling', 'false');
