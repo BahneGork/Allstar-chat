@@ -1,0 +1,43 @@
+{
+  "name": "allstar",
+  "productName": "AllStar",
+  "version": "1.0.0",
+  "description": "Lightweight all-in-one messenger for Windows - Messenger & Google Chat",
+  "main": "src/main.js",
+  "author": "Your Name",
+  "license": "MIT",
+  "scripts": {
+    "start": "electron .",
+    "dev": "NODE_ENV=development electron .",
+    "build": "electron-builder --win --x64",
+    "build:dir": "electron-builder --win --x64 --dir"
+  },
+  "build": {
+    "appId": "com.allstar.app",
+    "productName": "AllStar",
+    "directories": {
+      "output": "dist"
+    },
+    "win": {
+      "target": [
+        {
+          "target": "portable",
+          "arch": ["x64"]
+        }
+      ]
+    },
+    "files": [
+      "src/**/*",
+      "assets/**/*",
+      "node_modules/**/*",
+      "package.json"
+    ]
+  },
+  "devDependencies": {
+    "electron": "^39.0.0",
+    "electron-builder": "^26.0.12"
+  },
+  "dependencies": {
+    "electron-store": "^11.0.2"
+  }
+}

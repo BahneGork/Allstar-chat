@@ -1,0 +1,219 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self' 'unsafe-inline' https:; script-src 'self' 'unsafe-inline';">
+  <title>AllStar</title>
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <div id="app">
+    <!-- Tab Bar -->
+    <div id="tab-bar">
+      <div id="tabs"></div>
+      <div id="tab-controls">
+        <button id="settings-btn" title="Settings">⚙️</button>
+        <button id="memory-btn" title="Memory Usage">📊</button>
+      </div>
+    </div>
+
+    <!-- Webview Container -->
+    <div id="webview-container"></div>
+
+    <!-- Settings Modal -->
+    <div id="settings-modal" class="modal hidden">
+      <div class="modal-content">
+        <div class="modal-header">
+          <h2>Settings</h2>
+          <button id="close-settings">×</button>
+        </div>
+        <div class="modal-body">
+          <div class="settings-section">
+            <h3>Interface</h3>
+
+            <div class="setting-item">
+              <div class="setting-info">
+                <label>
+                  <input type="checkbox" id="setting-autoHideInactiveTabs">
+                  Auto-hide Inactive Tabs
+                </label>
+                <span class="memory-tip">Saves ~100MB per hidden tab</span>
+              </div>
+            </div>
+
+            <div class="setting-item">
+              <div class="setting-info">
+                <label>Tab Suspension Timeout</label>
+                <select id="setting-tabSuspensionTimeout">
+                  <option value="0">Never</option>
+                  <option value="10">10 minutes</option>
+                  <option value="30">30 minutes</option>
+                  <option value="60">1 hour</option>
+                  <option value="120">2 hours</option>
+                </select>
+                <span class="memory-tip">Suspended tabs use ~70% less memory</span>
+              </div>
+            </div>
+          </div>
+
+          <div class="settings-section">
+            <h3>System Integration</h3>
+
+            <div class="setting-item">
+              <div class="setting-info">
+                <label>
+                  <input type="checkbox" id="setting-systemTray">
+                  System Tray Icon
+                </label>
+                <span class="memory-tip">~2MB, allows minimizing to tray</span>
+              </div>
+            </div>
+
+            <div class="setting-item">
+              <div class="setting-info">
+                <label>
+                  <input type="checkbox" id="setting-closeToTray">
+                  Close to Tray
+                </label>
+                <span class="memory-tip">Keeps app running in background</span>
+              </div>
+            </div>
+
+            <div class="setting-item">
+              <div class="setting-info">
+                <label>
+                  <input type="checkbox" id="setting-startOnBoot">
+                  Start on Boot
+                </label>
+                <span class="memory-tip">No memory impact</span>
+              </div>
+            </div>
+          </div>
+
+          <div class="settings-section">
+            <h3>Notifications</h3>
+
+            <div class="setting-item">
+              <div class="setting-info">
+                <label>
+                  <input type="checkbox" id="setting-notifications">
+                  Desktop Notifications
+                </label>
+                <span class="memory-tip">~2MB, essential for chat apps</span>
+              </div>
+            </div>
+          </div>
+
+          <div class="settings-section">
+            <h3>Performance</h3>
+
+            <div class="setting-item">
+              <div class="setting-info">
+                <label>
+                  <input type="checkbox" id="setting-hardwareAcceleration">
+                  Hardware Acceleration
+                </label>
+                <span class="memory-tip">Uses GPU, reduces CPU load</span>
+              </div>
+            </div>
+
+            <div class="setting-item">
+              <div class="setting-info">
+                <label>
+                  <input type="checkbox" id="setting-preloadServices">
+                  Preload Services
+                </label>
+                <span class="memory-tip">Faster switching but +150MB per service</span>
+              </div>
+            </div>
+
+            <div class="setting-item">
+              <div class="setting-info">
+                <label>Cache Size</label>
+                <select id="setting-cacheSize">
+                  <option value="50">50 MB</option>
+                  <option value="100">100 MB</option>
+                  <option value="250">250 MB</option>
+                  <option value="500">500 MB</option>
+                  <option value="1000">Unlimited</option>
+                </select>
+                <span class="memory-tip">Larger cache = less reloading but more disk</span>
+              </div>
+            </div>
+          </div>
+
+          <div class="settings-section">
+            <h3>Privacy</h3>
+
+            <div class="setting-item">
+              <div class="setting-info">
+                <label>
+                  <input type="checkbox" id="setting-persistSessions">
+                  Persistent Sessions
+                </label>
+                <span class="memory-tip">Stay logged in, ~5MB per service</span>
+              </div>
+            </div>
+
+            <div class="setting-item">
+              <div class="setting-info">
+                <label>
+                  <input type="checkbox" id="setting-clearCacheOnExit">
+                  Clear Cache on Exit
+                </label>
+                <span class="memory-tip">Better privacy, slower startup</span>
+              </div>
+            </div>
+          </div>
+
+          <div class="settings-section">
+            <h3>Services</h3>
+            <div id="services-list"></div>
+          </div>
+        </div>
+        <div class="modal-footer">
+          <button id="save-settings" class="btn-primary">Save Settings</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Memory Monitor Modal -->
+    <div id="memory-modal" class="modal hidden">
+      <div class="modal-content">
+        <div class="modal-header">
+          <h2>Memory Usage</h2>
+          <button id="close-memory">×</button>
+        </div>
+        <div class="modal-body">
+          <div class="memory-stats">
+            <div class="stat-card">
+              <h3>Total Memory</h3>
+              <div id="total-memory" class="stat-value">-- MB</div>
+            </div>
+            <div class="stat-card">
+              <h3>Heap Used</h3>
+              <div id="heap-used" class="stat-value">-- MB</div>
+            </div>
+            <div class="stat-card">
+              <h3>System Free</h3>
+              <div id="system-free" class="stat-value">-- MB</div>
+            </div>
+          </div>
+          <div class="memory-comparison">
+            <h3>Comparison</h3>
+            <p><strong>Your old app (Singelbox):</strong> ~2000 MB</p>
+            <p><strong>AllStar (current):</strong> <span id="current-usage">--</span> MB</p>
+            <p class="savings"><strong>Memory saved:</strong> <span id="memory-saved">--</span> MB (<span id="savings-percent">--</span>%)</p>
+          </div>
+        </div>
+        <div class="modal-footer">
+          <button id="refresh-memory" class="btn-primary">Refresh</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script src="renderer.js"></script>
+</body>
+</html>
