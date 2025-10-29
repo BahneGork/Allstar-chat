@@ -4,9 +4,14 @@
   box-sizing: border-box;
 }
 
+html, body {
+  width: 100%;
+  height: 100%;
+  overflow: hidden;
+}
+
 body {
   font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
-  overflow: hidden;
   background: #1e1e1e;
   color: #e0e0e0;
 }
@@ -14,7 +19,8 @@ body {
 #app {
   display: flex;
   flex-direction: column;
-  height: 100vh;
+  width: 100%;
+  height: 100%;
 }
 
 /* Tab Bar */
@@ -82,6 +88,8 @@ body {
   flex: 1;
   position: relative;
   overflow: hidden;
+  background: #fff;
+  min-height: 0;
 }
 
 webview {
@@ -91,10 +99,12 @@ webview {
   width: 100%;
   height: 100%;
   display: none;
+  border: none;
+  outline: none;
 }
 
 webview.active {
-  display: block;
+  display: flex;
 }
 
 /* Modal */

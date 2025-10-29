@@ -5,16 +5,22 @@ let tabSuspensionTimers = {};
 
 // Initialize app
 async function init() {
+  console.log('Initializing AllStar...');
   currentSettings = await window.electron.getSettings();
   currentServices = await window.electron.getServices();
+  console.log('Services loaded:', currentServices);
+  console.log('Settings loaded:', currentSettings);
 
   renderTabs();
   setupEventListeners();
 
   // Activate first enabled service
   const firstEnabledService = currentServices.find(s => s.enabled);
+  console.log('First enabled service:', firstEnabledService);
   if (firstEnabledService) {
     switchTab(firstEnabledService.id);
+  } else {
+    console.error('No enabled services found!');
   }
 }
 
@@ -74,8 +80,12 @@ function switchTab(serviceId) {
 // Create webview
 function createWebview(serviceId) {
   const service = currentServices.find(s => s.id === serviceId);
-  if (!service) return;
+  if (!service) {
+    console.error('Service not found:', serviceId);
+    return;
+  }
 
+  console.log('Creating webview for:', service.name, service.url);
   const container = document.getElementById('webview-container');
   const webview = document.createElement('webview');
 
@@ -94,11 +104,19 @@ function createWebview(serviceId) {
 
   // Event listeners
   webview.addEventListener('did-start-loading', () => {
-    console.log(`${service.name} loading...`);
+    console.log(`${service.name} started loading...`);
   });
 
   webview.addEventListener('did-stop-loading', () => {
-    console.log(`${service.name} loaded`);
+    console.log(`${service.name} loaded successfully`);
+  });
+
+  webview.addEventListener('did-fail-load', (e) => {
+    console.error(`${service.name} failed to load:`, e);
+  });
+
+  webview.addEventListener('dom-ready', () => {
+    console.log(`${service.name} DOM ready`);
   });
 
   webview.addEventListener('new-window', (e) => {
@@ -106,6 +124,7 @@ function createWebview(serviceId) {
   });
 
   container.appendChild(webview);
+  console.log('Webview appended to container');
 }
 
 // Suspend tab (reduce memory usage)
