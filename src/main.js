@@ -390,15 +390,16 @@ app.on('before-quit', async () => {
   // Force destroy all webviews immediately
   if (mainWindow && !mainWindow.isDestroyed()) {
     try {
-      const webContents = mainWindow.webContents;
-      if (webContents && !webContents.isDestroyed()) {
-        // Get all webview guest instances and force close them
-        const guests = webContents.getAllWebContents();
+      const { webContents } = require('electron');
+      // Get all webview guest instances and force close them
+      const allWebContents = webContents.getAllWebContents();
+      const mainWindowContents = mainWindow.webContents;
 
+      if (allWebContents && mainWindowContents) {
         // Stop and destroy each guest webview
-        for (const guest of guests) {
+        for (const guest of allWebContents) {
           try {
-            if (guest && !guest.isDestroyed() && guest.id !== webContents.id) {
+            if (guest && !guest.isDestroyed() && guest.id !== mainWindowContents.id) {
               guest.closeDevTools();
               guest.stop();
               // Force navigation to blank page first
