@@ -154,27 +154,60 @@ function startTitleMonitoring(webview, serviceId) {
   setInterval(() => {
     try {
       const title = webview.getTitle();
-      updateBadgeFromTitle(serviceId, title);
+      if (title) {
+        console.log(`[${serviceId}] Title:`, title);
+        updateBadgeFromTitle(serviceId, title);
+      }
     } catch (e) {
       // Webview might not be ready
+      console.error(`Error getting title for ${serviceId}:`, e);
     }
-  }, 2000); // Check every 2 seconds
+  }, 3000); // Check every 3 seconds
 }
 
 // Update badge based on page title
 function updateBadgeFromTitle(serviceId, title) {
   if (!title) return;
 
-  // Extract number from title (e.g., "(3) Messenger" or "Messenger (3)")
-  const match = title.match(/\((\d+)\)/);
   const badge = document.querySelector(`.tab-badge[data-service-id="${serviceId}"]`);
+  if (!badge) {
+    console.log(`Badge element not found for ${serviceId}`);
+    return;
+  }
 
-  if (!badge) return;
+  // Try multiple patterns:
+  // "(3) Messenger", "Messenger (3)", "(3)", "3 new messages", etc.
+  let count = 0;
 
-  if (match && parseInt(match[1]) > 0) {
-    const count = parseInt(match[1]);
+  // Pattern 1: (number) at start or end
+  let match = title.match(/\((\d+)\)/);
+  if (match) {
+    count = parseInt(match[1]);
+    console.log(`[${serviceId}] Found count in parentheses:`, count);
+  }
+
+  // Pattern 2: number followed by "new" or "unread"
+  if (count === 0) {
+    match = title.match(/(\d+)\s*(new|unread)/i);
+    if (match) {
+      count = parseInt(match[1]);
+      console.log(`[${serviceId}] Found count with 'new/unread':`, count);
+    }
+  }
+
+  // Pattern 3: Just a number at the start
+  if (count === 0) {
+    match = title.match(/^(\d+)\s/);
+    if (match) {
+      count = parseInt(match[1]);
+      console.log(`[${serviceId}] Found count at start:`, count);
+    }
+  }
+
+  if (count > 0) {
     badge.textContent = count > 99 ? '99+' : count.toString();
     badge.style.display = 'inline-flex';
+    console.log(`[${serviceId}] Badge updated:`, count);
   } else {
     badge.style.display = 'none';
   }

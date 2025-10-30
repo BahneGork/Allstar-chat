@@ -234,38 +234,62 @@ app.on('activate', () => {
 app.on('before-quit', (event) => {
   app.isQuitting = true;
 
-  // Clean up all webviews
-  if (mainWindow && mainWindow.webContents && !mainWindow.isDestroyed()) {
-    mainWindow.webContents.executeJavaScript(`
-      document.querySelectorAll('webview').forEach(wv => {
-        try {
-          wv.stop();
-          wv.remove();
-        } catch(e) {}
-      });
-    `).catch(() => {});
+  // Force destroy all webviews immediately
+  if (mainWindow && !mainWindow.isDestroyed()) {
+    try {
+      const webContents = mainWindow.webContents;
+      if (webContents) {
+        // Get all webview guest instances and force close them
+        const guests = webContents.getAllWebContents();
+        guests.forEach(guest => {
+          try {
+            if (guest && !guest.isDestroyed()) {
+              guest.closeDevTools();
+              guest.stop();
+              guest.destroy();
+            }
+          } catch (e) {
+            console.error('Error destroying guest:', e);
+          }
+        });
+      }
+    } catch (e) {
+      console.error('Error cleaning webviews:', e);
+    }
   }
 
   const settings = store.get('settings');
-  if (settings.clearCacheOnExit) {
+  if (settings && settings.clearCacheOnExit) {
     const { session } = require('electron');
-    session.defaultSession.clearCache();
-    session.defaultSession.clearStorageData();
+    try {
+      session.defaultSession.clearCache();
+      session.defaultSession.clearStorageData();
+    } catch (e) {}
   }
 });
 
 app.on('will-quit', () => {
-  // Remove all IPC handlers to prevent memory leaks
-  ipcMain.removeHandler('get-settings');
-  ipcMain.removeHandler('update-settings');
-  ipcMain.removeHandler('get-services');
-  ipcMain.removeHandler('update-services');
-  ipcMain.removeHandler('get-memory-info');
+  // Remove all IPC handlers
+  try {
+    ipcMain.removeHandler('get-settings');
+    ipcMain.removeHandler('update-settings');
+    ipcMain.removeHandler('get-services');
+    ipcMain.removeHandler('update-services');
+    ipcMain.removeHandler('get-memory-info');
+  } catch (e) {}
+
+  // Force close main window
+  if (mainWindow && !mainWindow.isDestroyed()) {
+    mainWindow.destroy();
+  }
 });
 
 // Force quit all processes on exit
 app.on('quit', () => {
-  if (mainWindow) {
-    mainWindow = null;
-  }
+  mainWindow = null;
+
+  // Force exit process
+  setTimeout(() => {
+    process.exit(0);
+  }, 100);
 });
