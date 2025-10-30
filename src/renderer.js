@@ -135,8 +135,6 @@ function createWebview(serviceId) {
   // Webview attributes for optimization
   webview.setAttribute('nodeintegration', 'false');
   webview.setAttribute('plugins', 'false');
-  // Allow Google Chat to navigate between chat.google.com and mail.google.com
-  webview.setAttribute('disablewebsecurity', serviceId === 'googlechat' ? 'true' : 'false');
   webview.setAttribute('webpreferences', 'contextIsolation=true,enableRemoteModule=false');
 
   // Event listeners
@@ -169,13 +167,20 @@ function createWebview(serviceId) {
     monitoringStarted[serviceId] = true;
 
     // Inject user agent to help with compatibility
-    webview.setUserAgent(webview.getUserAgent() + ' AllStar/1.0');
+    try {
+      webview.setUserAgent(webview.getUserAgent() + ' AllStar/1.0');
+    } catch (e) {
+      console.warn(`[${serviceId}] Could not set user agent:`, e.message);
+    }
 
     // Test if JavaScript execution works
     webview.executeJavaScript('document.title').then(title => {
       console.log(`[${serviceId}] JavaScript execution works! Title: ${title}`);
     }).catch(e => {
-      console.error(`[${serviceId}] JavaScript execution FAILED:`, e);
+      // Silently ignore - frame might be disposed during navigation
+      if (!e.message.includes('disposed')) {
+        console.error(`[${serviceId}] JavaScript execution FAILED:`, e.message);
+      }
     });
 
     // Start monitoring for title changes and DOM-based notifications
@@ -296,7 +301,10 @@ function startDOMMonitoring(webview, serviceId) {
           updateBadgeCount(serviceId, 0);
         }
       }).catch((e) => {
-        console.error(`[${serviceId}] Injection failed:`, e);
+        // Silently ignore disposed frame errors during navigation
+        if (!e.message || !e.message.includes('disposed')) {
+          console.error(`[${serviceId}] Injection failed:`, e.message || e);
+        }
       });
     } catch (e) {
       console.error(`Error monitoring DOM for ${serviceId}:`, e);
