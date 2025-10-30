@@ -133,8 +133,9 @@ function createWebview(serviceId) {
 
   webview.addEventListener('dom-ready', () => {
     console.log(`${service.name} DOM ready`);
-    // Start monitoring for title changes (which often include unread counts)
+    // Start monitoring for title changes and DOM-based notifications
     startTitleMonitoring(webview, serviceId);
+    startDOMMonitoring(webview, serviceId);
   });
 
   webview.addEventListener('page-title-updated', (e) => {
@@ -163,6 +164,68 @@ function startTitleMonitoring(webview, serviceId) {
       console.error(`Error getting title for ${serviceId}:`, e);
     }
   }, 3000); // Check every 3 seconds
+}
+
+// Monitor DOM for notification elements
+function startDOMMonitoring(webview, serviceId) {
+  setInterval(() => {
+    try {
+      // Inject code to check for notification badges in the page
+      webview.executeJavaScript(`
+        (function() {
+          // Try to find notification count in various ways
+          let count = 0;
+
+          // Method 1: Check for notification badge elements (common in Messenger/Chat)
+          const badges = document.querySelectorAll('[data-testid*="notification"], [data-badge], .notification-badge, [role="status"]');
+          for (const badge of badges) {
+            const text = badge.textContent || badge.getAttribute('aria-label') || '';
+            const match = text.match(/\\d+/);
+            if (match) {
+              count = Math.max(count, parseInt(match[0]));
+            }
+          }
+
+          // Method 2: Check favicon for notification indicator
+          const favicon = document.querySelector('link[rel*="icon"]');
+          if (favicon && favicon.href.includes('notification')) {
+            // Some sites change favicon when there are notifications
+            count = count || 1; // At least one notification
+          }
+
+          // Method 3: Check page title again (some sites update it dynamically)
+          const titleMatch = document.title.match(/\\((\\d+)\\)/);
+          if (titleMatch) {
+            count = Math.max(count, parseInt(titleMatch[1]));
+          }
+
+          return count;
+        })();
+      `).then(count => {
+        if (count > 0) {
+          console.log(`[${serviceId}] DOM found count:`, count);
+          updateBadgeCount(serviceId, count);
+        }
+      }).catch(e => {
+        // Injection failed, that's okay
+      });
+    } catch (e) {
+      console.error(`Error monitoring DOM for ${serviceId}:`, e);
+    }
+  }, 5000); // Check every 5 seconds
+}
+
+// Update badge with a specific count
+function updateBadgeCount(serviceId, count) {
+  const badge = document.querySelector(`.tab-badge[data-service-id="${serviceId}"]`);
+  if (!badge) return;
+
+  if (count > 0) {
+    badge.textContent = count > 99 ? '99+' : count.toString();
+    badge.style.display = 'inline-flex';
+  } else {
+    badge.style.display = 'none';
+  }
 }
 
 // Update badge based on page title
