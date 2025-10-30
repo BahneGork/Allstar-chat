@@ -119,7 +119,8 @@ function createWebview(serviceId) {
   // Webview attributes for optimization
   webview.setAttribute('nodeintegration', 'false');
   webview.setAttribute('plugins', 'false');
-  webview.setAttribute('disablewebsecurity', 'false');
+  // Allow Google Chat to navigate between chat.google.com and mail.google.com
+  webview.setAttribute('disablewebsecurity', serviceId === 'googlechat' ? 'true' : 'false');
   webview.setAttribute('webpreferences', 'contextIsolation=true,enableRemoteModule=false');
 
   // Event listeners
@@ -132,7 +133,11 @@ function createWebview(serviceId) {
   });
 
   webview.addEventListener('did-fail-load', (e) => {
-    console.error(`${service.name} failed to load:`, e);
+    // Ignore subframe errors and redirects (error code -3)
+    if (!e.isMainFrame || e.errorCode === -3) {
+      return; // These are expected during normal operation
+    }
+    console.error(`${service.name} failed to load:`, e.errorCode, e.errorDescription);
   });
 
   webview.addEventListener('dom-ready', () => {
@@ -256,8 +261,8 @@ function startDOMMonitoring(webview, serviceId) {
           console.log(`[${serviceId}] No notifications found`);
           updateBadgeCount(serviceId, 0);
         }
-      }).catch(() => {
-        // Injection failed, that's okay
+      }).catch((e) => {
+        console.error(`[${serviceId}] Injection failed:`, e);
       });
     } catch (e) {
       console.error(`Error monitoring DOM for ${serviceId}:`, e);
