@@ -336,9 +336,17 @@ ipcMain.handle('get-memory-info', async () => {
   // Get all process metrics (includes all Electron processes)
   const allProcessMetrics = app.getAppMetrics();
 
+  // Filter to only main processes (exclude GPU/utility that Task Manager groups differently)
+  // Task Manager shows main process + renderer + webviews only
+  const relevantProcesses = allProcessMetrics.filter(proc => {
+    // Include browser (main), renderer, and webview processes
+    // Exclude GPU and utility processes
+    return proc.type === 'Browser' || proc.type === 'Renderer' || proc.type === 'Webview';
+  });
+
   // Use workingSetSize which matches Task Manager's "Memory" column
   // workingSetSize is in KB on Windows
-  const totalMemory = allProcessMetrics.reduce((total, proc) => {
+  const totalMemory = relevantProcesses.reduce((total, proc) => {
     const memoryValue = proc.memory?.workingSetSize || 0;
     return total + memoryValue;
   }, 0);
@@ -348,7 +356,7 @@ ipcMain.handle('get-memory-info', async () => {
 
   return {
     app: {
-      rss: totalMemoryMB, // Total memory across all processes
+      rss: totalMemoryMB, // Total memory across main processes
       heapUsed: Math.round(processMemory.heapUsed / 1024 / 1024), // MB
       heapTotal: Math.round(processMemory.heapTotal / 1024 / 1024), // MB
       external: Math.round(processMemory.external / 1024 / 1024), // MB
