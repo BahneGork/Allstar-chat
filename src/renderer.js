@@ -2,6 +2,7 @@ let currentSettings = {};
 let currentServices = [];
 let activeTabId = null;
 let tabSuspensionTimers = {};
+let monitoringStarted = {}; // Track which webviews have monitoring started
 
 // Initialize app
 async function init() {
@@ -142,6 +143,15 @@ function createWebview(serviceId) {
 
   webview.addEventListener('dom-ready', () => {
     console.log(`${service.name} DOM ready`);
+
+    // Only start monitoring once per webview
+    if (monitoringStarted[serviceId]) {
+      console.log(`[${serviceId}] Monitoring already started, skipping...`);
+      return;
+    }
+
+    console.log(`[${serviceId}] First DOM ready - starting monitoring`);
+    monitoringStarted[serviceId] = true;
 
     // Inject user agent to help with compatibility
     webview.setUserAgent(webview.getUserAgent() + ' AllStar/1.0');
