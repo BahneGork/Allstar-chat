@@ -56,7 +56,7 @@ function getDefaultConfig() {
       systemTray: true,
       notifications: true,
       persistSessions: true,
-      autoHideInactiveTabs: true,
+      autoSuspendInactiveTabs: true,
       tabSuspensionTimeout: 30,
       hardwareAcceleration: true,
       preloadServices: false,

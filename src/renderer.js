@@ -356,7 +356,7 @@ function suspendTab(serviceId) {
   if (webview && serviceId !== activeTabId) {
     console.log(`Suspending tab: ${serviceId}`);
     // In Electron, we can't truly suspend, but we can hide and throttle
-    if (currentSettings.autoHideInactiveTabs) {
+    if (currentSettings.autoSuspendInactiveTabs) {
       webview.style.display = 'none';
     }
   }
@@ -389,7 +389,7 @@ async function openSettings() {
   currentServices = await window.electron.getServices();
 
   // Populate settings
-  document.getElementById('setting-autoHideInactiveTabs').checked = currentSettings.autoHideInactiveTabs;
+  document.getElementById('setting-autoSuspendInactiveTabs').checked = currentSettings.autoSuspendInactiveTabs;
   document.getElementById('setting-tabSuspensionTimeout').value = currentSettings.tabSuspensionTimeout;
   document.getElementById('setting-systemTray').checked = currentSettings.systemTray;
   document.getElementById('setting-closeToTray').checked = currentSettings.closeToTray;
@@ -426,7 +426,7 @@ function closeSettings() {
 
 async function saveSettings() {
   const newSettings = {
-    autoHideInactiveTabs: document.getElementById('setting-autoHideInactiveTabs').checked,
+    autoSuspendInactiveTabs: document.getElementById('setting-autoSuspendInactiveTabs').checked,
     tabSuspensionTimeout: parseInt(document.getElementById('setting-tabSuspensionTimeout').value),
     systemTray: document.getElementById('setting-systemTray').checked,
     closeToTray: document.getElementById('setting-closeToTray').checked,
