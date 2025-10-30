@@ -102,7 +102,25 @@ function createTray(settings) {
   if (!settings.systemTray || tray) return;
 
   const iconPath = path.join(__dirname, '../assets/icon.png');
-  tray = new Tray(iconPath);
+
+  // Check if icon exists and has content
+  try {
+    const stats = fs.statSync(iconPath);
+    if (stats.size === 0) {
+      console.warn('Icon file is empty, skipping tray creation');
+      return;
+    }
+  } catch (e) {
+    console.warn('Icon file not found, skipping tray creation');
+    return;
+  }
+
+  try {
+    tray = new Tray(iconPath);
+  } catch (e) {
+    console.error('Failed to create tray icon:', e);
+    return;
+  }
 
   const contextMenu = Menu.buildFromTemplate([
     {
@@ -177,10 +195,13 @@ function createWindow() {
     app.commandLine.appendSwitch('disk-cache-size', cacheSizeBytes.toString());
   }
 
+  const iconPath = path.join(__dirname, '../assets/icon.png');
+  const hasValidIcon = fs.existsSync(iconPath) && fs.statSync(iconPath).size > 0;
+
   mainWindow = new BrowserWindow({
     width: bounds.width,
     height: bounds.height,
-    icon: path.join(__dirname, '../assets/icon.png'),
+    icon: hasValidIcon ? iconPath : undefined,
     webPreferences: {
       nodeIntegration: false,
       contextIsolation: true,
@@ -279,10 +300,13 @@ ipcMain.handle('show-notification', (_, title, body, serviceId) => {
   const settings = store.get('settings');
   if (!settings.notifications) return;
 
+  const iconPath = path.join(__dirname, '../assets/icon.png');
+  const hasValidIcon = fs.existsSync(iconPath) && fs.statSync(iconPath).size > 0;
+
   const notification = new Notification({
     title: title,
     body: body,
-    icon: path.join(__dirname, '../assets/icon.png'),
+    icon: hasValidIcon ? iconPath : undefined,
     silent: false
   });
 
