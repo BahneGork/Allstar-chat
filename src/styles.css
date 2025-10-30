@@ -50,6 +50,10 @@ body {
   border-radius: 4px 4px 0 0;
   transition: background 0.2s;
   font-size: 13px;
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 8px;
 }
 
 .tab:hover {
@@ -59,6 +63,25 @@ body {
 .tab.active {
   background: #1e1e1e;
   color: #fff;
+}
+
+.tab-text {
+  display: inline-block;
+}
+
+.tab-badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 18px;
+  height: 18px;
+  padding: 0 5px;
+  background: #ff4444;
+  color: #fff;
+  border-radius: 9px;
+  font-size: 11px;
+  font-weight: 700;
+  line-height: 1;
 }
 
 #tab-controls {

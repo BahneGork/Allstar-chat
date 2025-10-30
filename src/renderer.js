@@ -32,8 +32,19 @@ function renderTabs() {
   currentServices.filter(s => s.enabled).forEach(service => {
     const tab = document.createElement('button');
     tab.className = 'tab';
-    tab.textContent = service.name;
     tab.dataset.serviceId = service.id;
+
+    const tabText = document.createElement('span');
+    tabText.className = 'tab-text';
+    tabText.textContent = service.name;
+
+    const badge = document.createElement('span');
+    badge.className = 'tab-badge';
+    badge.dataset.serviceId = service.id;
+    badge.style.display = 'none';
+
+    tab.appendChild(tabText);
+    tab.appendChild(badge);
     tab.addEventListener('click', () => switchTab(service.id));
     tabsContainer.appendChild(tab);
   });
@@ -61,6 +72,10 @@ function switchTab(serviceId) {
   document.querySelectorAll('.tab').forEach(tab => {
     tab.classList.toggle('active', tab.dataset.serviceId === serviceId);
   });
+
+  // Clear badge when viewing the tab (user has seen the notifications)
+  // Note: Badge will reappear if title updates with new unread count
+  // This gives immediate visual feedback that you've opened the tab
 
   // Update webview visibility
   document.querySelectorAll('webview').forEach(webview => {
@@ -118,6 +133,12 @@ function createWebview(serviceId) {
 
   webview.addEventListener('dom-ready', () => {
     console.log(`${service.name} DOM ready`);
+    // Start monitoring for title changes (which often include unread counts)
+    startTitleMonitoring(webview, serviceId);
+  });
+
+  webview.addEventListener('page-title-updated', (e) => {
+    updateBadgeFromTitle(serviceId, e.title);
   });
 
   webview.addEventListener('new-window', (e) => {
@@ -126,6 +147,37 @@ function createWebview(serviceId) {
 
   container.appendChild(webview);
   console.log('Webview appended to container');
+}
+
+// Monitor page title for unread counts
+function startTitleMonitoring(webview, serviceId) {
+  setInterval(() => {
+    try {
+      const title = webview.getTitle();
+      updateBadgeFromTitle(serviceId, title);
+    } catch (e) {
+      // Webview might not be ready
+    }
+  }, 2000); // Check every 2 seconds
+}
+
+// Update badge based on page title
+function updateBadgeFromTitle(serviceId, title) {
+  if (!title) return;
+
+  // Extract number from title (e.g., "(3) Messenger" or "Messenger (3)")
+  const match = title.match(/\((\d+)\)/);
+  const badge = document.querySelector(`.tab-badge[data-service-id="${serviceId}"]`);
+
+  if (!badge) return;
+
+  if (match && parseInt(match[1]) > 0) {
+    const count = parseInt(match[1]);
+    badge.textContent = count > 99 ? '99+' : count.toString();
+    badge.style.display = 'inline-flex';
+  } else {
+    badge.style.display = 'none';
+  }
 }
 
 // Suspend tab (reduce memory usage)
