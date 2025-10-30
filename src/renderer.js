@@ -14,14 +14,24 @@ async function init() {
   renderTabs();
   setupEventListeners();
 
-  // Activate first enabled service
-  const firstEnabledService = currentServices.find(s => s.enabled);
-  console.log('First enabled service:', firstEnabledService);
-  if (firstEnabledService) {
-    switchTab(firstEnabledService.id);
-  } else {
+  // Preload all enabled services in background
+  const enabledServices = currentServices.filter(s => s.enabled);
+  console.log('Enabled services:', enabledServices);
+
+  if (enabledServices.length === 0) {
     console.error('No enabled services found!');
+    return;
   }
+
+  // Create webviews for all enabled services
+  enabledServices.forEach(service => {
+    createWebview(service.id);
+  });
+
+  // Activate first enabled service
+  const firstEnabledService = enabledServices[0];
+  console.log('Activating first service:', firstEnabledService);
+  switchTab(firstEnabledService.id);
 }
 
 // Render tabs
@@ -82,14 +92,8 @@ function switchTab(serviceId) {
     webview.classList.toggle('active', webview.dataset.serviceId === serviceId);
   });
 
-  // Create webview if it doesn't exist
-  const existingWebview = document.querySelector(`webview[data-service-id="${serviceId}"]`);
-  if (!existingWebview) {
-    createWebview(serviceId);
-  } else {
-    // Resume if suspended
-    resumeTab(serviceId);
-  }
+  // Resume if suspended
+  resumeTab(serviceId);
 }
 
 // Create webview
@@ -133,6 +137,10 @@ function createWebview(serviceId) {
 
   webview.addEventListener('dom-ready', () => {
     console.log(`${service.name} DOM ready`);
+
+    // Inject user agent to help with compatibility
+    webview.setUserAgent(webview.getUserAgent() + ' AllStar/1.0');
+
     // Start monitoring for title changes and DOM-based notifications
     startTitleMonitoring(webview, serviceId);
     startDOMMonitoring(webview, serviceId);
@@ -173,68 +181,79 @@ function startDOMMonitoring(webview, serviceId) {
       // Inject code to check for notification badges in the page
       webview.executeJavaScript(`
         (function() {
-          // Try to find notification count in various ways
           let count = 0;
+          let debugInfo = [];
 
-          // Method 1: Check for notification badge elements (common in Messenger/Chat)
-          const badges = document.querySelectorAll('[data-testid*="notification"], [data-badge], .notification-badge, [role="status"]');
+          // Method 1: Messenger specific - check for notification badge elements
+          const badges = document.querySelectorAll('[data-testid*="notification"], [data-badge], .notification-badge');
+          debugInfo.push('Method 1 (Messenger badges): ' + badges.length + ' elements');
           for (const badge of badges) {
             const text = badge.textContent || badge.getAttribute('aria-label') || '';
             const match = text.match(/\\d+/);
             if (match) {
               count = Math.max(count, parseInt(match[0]));
+              debugInfo.push('Found in badge: ' + match[0]);
             }
           }
 
-          // Method 2: Google Chat specific - check ALL elements with numbers
-          // Google Chat doesn't use standard badge patterns
-          const allElements = document.querySelectorAll('*');
-          for (const el of allElements) {
-            // Check for badge-like elements by class patterns
-            const classList = Array.from(el.classList || []).join(' ');
-            if (classList.includes('badge') ||
-                classList.includes('count') ||
-                classList.includes('unread') ||
-                el.getAttribute('aria-label')?.toLowerCase().includes('unread')) {
-
-              const text = el.textContent?.trim() || el.getAttribute('aria-label') || '';
-              const match = text.match(/\\d+/);
-              if (match && parseInt(match[0]) < 1000) { // Sanity check to avoid timestamps
-                count = Math.max(count, parseInt(match[0]));
+          // Method 2: Google Chat specific - navigation sidebar badges
+          // Google Chat shows unread count in the left sidebar navigation
+          const chatSidebar = document.querySelectorAll('[role="navigation"] span, [data-item-id] span, .LoYTxf span');
+          debugInfo.push('Method 2 (Chat sidebar): ' + chatSidebar.length + ' elements');
+          for (const el of chatSidebar) {
+            const text = el.textContent?.trim() || '';
+            // Must be ONLY a number (not part of a longer string)
+            if (/^\\d+$/.test(text)) {
+              const num = parseInt(text);
+              if (num < 100 && num > 0) { // Reasonable unread message count
+                count = Math.max(count, num);
+                debugInfo.push('Found in sidebar: ' + num);
               }
             }
           }
 
-          // Method 3: Check for material design badges (Google Chat uses Material)
-          const materialBadges = document.querySelectorAll('.mat-badge-content, [matbadge], .mdc-badge, span[role="status"]');
-          for (const badge of materialBadges) {
-            const text = badge.textContent?.trim() || badge.getAttribute('matbadge') || '';
-            const match = text.match(/^(\\d+)$/); // Exact number match
+          // Method 3: Check for elements with specific unread-related aria labels
+          const ariaElements = document.querySelectorAll('[aria-label*="unread" i], [aria-label*="new message" i]');
+          debugInfo.push('Method 3 (Aria labels): ' + ariaElements.length + ' elements');
+          for (const el of ariaElements) {
+            const ariaLabel = el.getAttribute('aria-label') || '';
+            const match = ariaLabel.match(/(\\d+)\\s*(unread|new)/i);
             if (match) {
               count = Math.max(count, parseInt(match[1]));
+              debugInfo.push('Found in aria-label: ' + match[1]);
             }
           }
 
-          // Method 4: Check favicon for notification indicator
-          const favicon = document.querySelector('link[rel*="icon"]');
-          if (favicon && favicon.href.includes('notification')) {
-            count = count || 1;
-          }
-
-          // Method 5: Check page title for notification pattern (Messenger style)
+          // Method 4: Check page title for notification pattern (Messenger style)
           const titleMatch = document.title.match(/^\\((\\d+)\\)/);
           if (titleMatch) {
             count = Math.max(count, parseInt(titleMatch[1]));
+            debugInfo.push('Found in title: ' + titleMatch[1]);
           }
 
-          return count;
+          // Method 5: Look for badge-like spans (small, numeric content)
+          const smallSpans = document.querySelectorAll('span[style*="background"], span[class*="badge" i], span[class*="count" i]');
+          debugInfo.push('Method 5 (Badge spans): ' + smallSpans.length + ' elements');
+          for (const span of smallSpans) {
+            const text = span.textContent?.trim() || '';
+            if (/^\\d+$/.test(text)) {
+              const num = parseInt(text);
+              if (num < 100 && num > 0) {
+                count = Math.max(count, num);
+                debugInfo.push('Found in badge span: ' + num);
+              }
+            }
+          }
+
+          return { count, debugInfo: debugInfo.join(' | ') };
         })();
-      `).then(count => {
-        if (count > 0) {
-          console.log(`[${serviceId}] DOM found count:`, count);
-          updateBadgeCount(serviceId, count);
+      `).then(result => {
+        console.log(`[${serviceId}] ${result.debugInfo}`);
+        if (result.count > 0) {
+          console.log(`[${serviceId}] *** FOUND COUNT: ${result.count} ***`);
+          updateBadgeCount(serviceId, result.count);
         } else {
-          // Clear badge if no count found
+          console.log(`[${serviceId}] No notifications found`);
           updateBadgeCount(serviceId, 0);
         }
       }).catch(() => {
