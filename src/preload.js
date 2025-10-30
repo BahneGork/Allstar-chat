@@ -12,5 +12,8 @@ contextBridge.exposeInMainWorld('electron', {
   updateServices: (services) => ipcRenderer.invoke('update-services', services),
 
   // Memory monitoring
-  getMemoryInfo: () => ipcRenderer.invoke('get-memory-info')
+  getMemoryInfo: () => ipcRenderer.invoke('get-memory-info'),
+
+  // Notifications
+  showNotification: (title, body, serviceId) => ipcRenderer.invoke('show-notification', title, body, serviceId)
 });

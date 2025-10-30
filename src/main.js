@@ -1,7 +1,6 @@
-const { app, BrowserWindow, ipcMain, nativeImage } = require('electron');
+const { app, BrowserWindow, ipcMain, nativeImage, Tray, Menu, Notification } = require('electron');
 const path = require('path');
 const fs = require('fs');
-const os = require('os');
 
 // Set app name for Task Manager (multiple methods for Windows compatibility)
 app.setName('AllStar');
@@ -59,11 +58,11 @@ function getDefaultConfig() {
       autoSuspendInactiveTabs: true,
       tabSuspensionTimeout: 30,
       hardwareAcceleration: true,
-      preloadServices: false,
+      preloadServices: true, // Preload all services for faster switching
       cacheSize: 100,
       clearCacheOnExit: false,
       startOnBoot: false,
-      closeToTray: true
+      closeToTray: false // Disabled by default - requires system tray
     },
     services: [
       { id: 'messenger', name: 'Facebook Messenger', url: 'https://www.messenger.com', enabled: true },
@@ -99,6 +98,67 @@ const store = {
 let mainWindow;
 let tray = null;
 
+function createTray(settings) {
+  if (!settings.systemTray || tray) return;
+
+  const iconPath = path.join(__dirname, '../assets/icon.png');
+  tray = new Tray(iconPath);
+
+  const contextMenu = Menu.buildFromTemplate([
+    {
+      label: 'Show AllStar',
+      click: () => {
+        if (mainWindow) {
+          mainWindow.show();
+          mainWindow.focus();
+        }
+      }
+    },
+    {
+      label: 'Memory Monitor',
+      click: () => {
+        if (mainWindow) {
+          mainWindow.show();
+          mainWindow.focus();
+          mainWindow.webContents.executeJavaScript(`
+            document.getElementById('memory-btn').click();
+          `).catch(() => {});
+        }
+      }
+    },
+    { type: 'separator' },
+    {
+      label: 'Quit AllStar',
+      click: () => {
+        app.isQuitting = true;
+        app.quit();
+      }
+    }
+  ]);
+
+  tray.setToolTip('AllStar - Messenger & Chat');
+  tray.setContextMenu(contextMenu);
+
+  // Click tray icon to show/hide window
+  tray.on('click', () => {
+    if (mainWindow) {
+      if (mainWindow.isVisible()) {
+        mainWindow.hide();
+      } else {
+        mainWindow.show();
+        mainWindow.focus();
+      }
+    }
+  });
+}
+
+function destroyTray() {
+  if (tray) {
+    tray.destroy();
+    tray = null;
+  }
+}
+
 function createWindow() {
   const bounds = store.get('windowBounds');
   const settings = store.get('settings');
@@ -106,6 +166,15 @@ function createWindow() {
   // Hardware acceleration setting
   if (!settings.hardwareAcceleration) {
     app.disableHardwareAcceleration();
+  }
+
+  // Create system tray if enabled
+  createTray(settings);
+
+  // Set cache size limit
+  if (settings.cacheSize && settings.cacheSize < 1000) {
+    const cacheSizeBytes = settings.cacheSize * 1024 * 1024; // Convert MB to bytes
+    app.commandLine.appendSwitch('disk-cache-size', cacheSizeBytes.toString());
   }
 
   mainWindow = new BrowserWindow({
@@ -174,10 +243,26 @@ ipcMain.handle('get-settings', () => {
   return store.get('settings');
 });
 
-ipcMain.handle('update-settings', (event, newSettings) => {
+ipcMain.handle('update-settings', (_, newSettings) => {
   const currentSettings = store.get('settings');
   const updatedSettings = { ...currentSettings, ...newSettings };
   store.set('settings', updatedSettings);
+
+  // Update tray based on systemTray setting
+  if (updatedSettings.systemTray && !tray) {
+    createTray(updatedSettings);
+  } else if (!updatedSettings.systemTray && tray) {
+    destroyTray();
+  }
+
+  // Update auto-launch based on startOnBoot setting
+  if (updatedSettings.startOnBoot !== currentSettings.startOnBoot) {
+    app.setLoginItemSettings({
+      openAtLogin: updatedSettings.startOnBoot,
+      path: process.execPath
+    });
+  }
+
   return updatedSettings;
 });
 
@@ -185,9 +270,36 @@ ipcMain.handle('get-services', () => {
   return store.get('services');
 });
 
-ipcMain.handle('update-services', (event, services) => {
+ipcMain.handle('update-services', (_, services) => {
   store.set('services', services);
   return services;
+});
+
+ipcMain.handle('show-notification', (_, title, body, serviceId) => {
+  const settings = store.get('settings');
+  if (!settings.notifications) return;
+
+  const notification = new Notification({
+    title: title,
+    body: body,
+    icon: path.join(__dirname, '../assets/icon.png'),
+    silent: false
+  });
+
+  notification.on('click', () => {
+    if (mainWindow) {
+      mainWindow.show();
+      mainWindow.focus();
+      // Switch to the service tab that triggered the notification
+      if (serviceId) {
+        mainWindow.webContents.executeJavaScript(`
+          switchTab('${serviceId}');
+        `).catch(() => {});
+      }
+    }
+  });
+
+  notification.show();
 });
 
 ipcMain.handle('get-memory-info', async () => {

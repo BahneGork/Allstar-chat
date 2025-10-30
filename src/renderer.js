@@ -15,7 +15,7 @@ async function init() {
   renderTabs();
   setupEventListeners();
 
-  // Preload all enabled services in background
+  // Preload services based on setting
   const enabledServices = currentServices.filter(s => s.enabled);
   console.log('Enabled services:', enabledServices);
 
@@ -24,10 +24,17 @@ async function init() {
     return;
   }
 
-  // Create webviews for all enabled services
-  enabledServices.forEach(service => {
-    createWebview(service.id);
-  });
+  if (currentSettings.preloadServices) {
+    // Create webviews for all enabled services
+    console.log('Preloading all enabled services...');
+    enabledServices.forEach(service => {
+      createWebview(service.id);
+    });
+  } else {
+    // Only create first service
+    console.log('Preload disabled - creating only first service');
+    createWebview(enabledServices[0].id);
+  }
 
   // Activate first enabled service
   const firstEnabledService = enabledServices[0];
@@ -93,8 +100,16 @@ function switchTab(serviceId) {
     webview.classList.toggle('active', webview.dataset.serviceId === serviceId);
   });
 
-  // Resume if suspended
-  resumeTab(serviceId);
+  // Create webview if it doesn't exist (lazy loading when preload is disabled)
+  const existingWebview = document.querySelector(`webview[data-service-id="${serviceId}"]`);
+  if (!existingWebview) {
+    console.log(`Creating webview on-demand for: ${serviceId}`);
+    createWebview(serviceId);
+  } else {
+    // Resume if suspended
+    resumeTab(serviceId);
+  }
+
 }
 
 // Create webview
@@ -294,9 +309,25 @@ function updateBadgeCount(serviceId, count) {
   const badge = document.querySelector(`.tab-badge[data-service-id="${serviceId}"]`);
   if (!badge) return;
 
+  const previousCount = parseInt(badge.textContent) || 0;
+
   if (count > 0) {
     badge.textContent = count > 99 ? '99+' : count.toString();
     badge.style.display = 'inline-flex';
+
+    // Show notification if count increased and tab is not active
+    if (count > previousCount && serviceId !== activeTabId && currentSettings.notifications) {
+      const service = currentServices.find(s => s.id === serviceId);
+      if (service) {
+        const serviceName = service.name;
+        const messageCount = count > 99 ? '99+' : count;
+        window.electron.showNotification(
+          serviceName,
+          `${messageCount} unread message${count > 1 ? 's' : ''}`,
+          serviceId
+        );
+      }
+    }
   } else {
     badge.style.display = 'none';
   }
