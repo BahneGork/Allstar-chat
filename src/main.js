@@ -238,40 +238,80 @@ app.on('activate', () => {
   }
 });
 
-app.on('before-quit', () => {
+app.on('before-quit', async () => {
   app.isQuitting = true;
 
   // Force destroy all webviews immediately
   if (mainWindow && !mainWindow.isDestroyed()) {
     try {
       const webContents = mainWindow.webContents;
-      if (webContents) {
+      if (webContents && !webContents.isDestroyed()) {
         // Get all webview guest instances and force close them
         const guests = webContents.getAllWebContents();
-        guests.forEach(guest => {
+
+        // Stop and destroy each guest webview
+        for (const guest of guests) {
           try {
-            if (guest && !guest.isDestroyed()) {
+            if (guest && !guest.isDestroyed() && guest.id !== webContents.id) {
               guest.closeDevTools();
               guest.stop();
+              // Force navigation to blank page first
+              guest.loadURL('about:blank').catch(() => {});
               guest.destroy();
             }
           } catch (e) {
             console.error('Error destroying guest:', e);
           }
-        });
+        }
+
+        // Clear all sessions
+        try {
+          const { session } = require('electron');
+          const allSessions = [session.defaultSession];
+
+          // Get all persistent sessions
+          const services = store.get('services') || [];
+          for (const service of services) {
+            try {
+              const serviceSession = session.fromPartition(`persist:${service.id}`);
+              if (serviceSession) allSessions.push(serviceSession);
+            } catch (e) {}
+          }
+
+          // Clear cache if needed
+          const settings = store.get('settings');
+          if (settings && settings.clearCacheOnExit) {
+            for (const sess of allSessions) {
+              try {
+                await sess.clearCache();
+                await sess.clearStorageData();
+              } catch (e) {}
+            }
+          }
+
+          // Destroy all sessions
+          for (const sess of allSessions) {
+            try {
+              if (sess && sess !== session.defaultSession) {
+                // Close all webcontents using this session
+                const allContents = sess.getAllWebContents ? sess.getAllWebContents() : [];
+                for (const content of allContents) {
+                  try {
+                    if (!content.isDestroyed()) {
+                      content.destroy();
+                    }
+                  } catch (e) {}
+                }
+              }
+            } catch (e) {}
+          }
+        } catch (e) {
+          console.error('Error clearing sessions:', e);
+        }
       }
     } catch (e) {
       console.error('Error cleaning webviews:', e);
     }
-  }
-
-  const settings = store.get('settings');
-  if (settings && settings.clearCacheOnExit) {
-    const { session } = require('electron');
-    try {
-      session.defaultSession.clearCache();
-      session.defaultSession.clearStorageData();
-    } catch (e) {}
   }
 });
 
@@ -295,8 +335,19 @@ app.on('will-quit', () => {
 app.on('quit', () => {
   mainWindow = null;
 
-  // Force exit process
-  setTimeout(() => {
-    process.exit(0);
-  }, 100);
+  // Immediately kill all child processes
+  try {
+    const { execSync } = require('child_process');
+    if (process.platform === 'win32') {
+      // On Windows, kill all child processes
+      try {
+        execSync(`taskkill /F /T /PID ${process.pid}`, { stdio: 'ignore' });
+      } catch (e) {
+        // Process already dead, that's fine
+      }
+    }
+  } catch (e) {}
+
+  // Force exit process immediately
+  process.exit(0);
 });
