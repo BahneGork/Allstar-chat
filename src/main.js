@@ -197,15 +197,14 @@ ipcMain.handle('get-memory-info', async () => {
   // Get all process metrics (includes all Electron processes)
   const allProcessMetrics = app.getAppMetrics();
 
-  // workingSetSize is in KB on Windows, bytes on other platforms
-  // privateBytes gives us a more accurate Windows memory usage
+  // Use workingSetSize which matches Task Manager's "Memory" column
+  // workingSetSize is in KB on Windows
   const totalMemory = allProcessMetrics.reduce((total, proc) => {
-    // Use privateBytes if available (Windows), otherwise workingSetSize
-    const memoryValue = proc.memory?.privateBytes || proc.memory?.workingSetSize || 0;
+    const memoryValue = proc.memory?.workingSetSize || 0;
     return total + memoryValue;
   }, 0);
 
-  // Convert to MB (privateBytes is in KB on Windows)
+  // Convert KB to MB
   const totalMemoryMB = Math.round(totalMemory / 1024);
 
   return {
