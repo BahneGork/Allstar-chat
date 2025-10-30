@@ -225,10 +225,13 @@ function createWindow() {
   });
 
   mainWindow.on('close', (event) => {
-    if (settings.closeToTray && !app.isQuitting) {
+    // Don't allow close to tray if tray isn't available
+    if (settings.closeToTray && tray && !app.isQuitting) {
       event.preventDefault();
       mainWindow.hide();
     } else {
+      // Force quit mode when closing
+      app.isQuitting = true;
       saveBounds();
       // Clean up webviews before closing
       if (mainWindow && mainWindow.webContents) {
@@ -469,16 +472,18 @@ app.on('will-quit', () => {
 // Force quit all processes on exit
 app.on('quit', () => {
   mainWindow = null;
+  destroyTray();
 
   // Immediately kill all child processes
   try {
     const { execSync } = require('child_process');
     if (process.platform === 'win32') {
-      // On Windows, kill all child processes
+      // On Windows, kill all AllStar processes
       try {
-        execSync(`taskkill /F /T /PID ${process.pid}`, { stdio: 'ignore' });
+        // Kill by process name to catch all instances
+        execSync('taskkill /F /IM "AllStar.exe" /T', { stdio: 'ignore', timeout: 2000 });
       } catch (e) {
-        // Process already dead, that's fine
+        // Processes already dead or couldn't kill, that's fine
       }
     }
   } catch (e) {}
