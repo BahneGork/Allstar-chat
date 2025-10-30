@@ -186,15 +186,43 @@ function startDOMMonitoring(webview, serviceId) {
             }
           }
 
-          // Method 2: Check favicon for notification indicator
-          const favicon = document.querySelector('link[rel*="icon"]');
-          if (favicon && favicon.href.includes('notification')) {
-            // Some sites change favicon when there are notifications
-            count = count || 1; // At least one notification
+          // Method 2: Google Chat specific - check ALL elements with numbers
+          // Google Chat doesn't use standard badge patterns
+          const allElements = document.querySelectorAll('*');
+          for (const el of allElements) {
+            // Check for badge-like elements by class patterns
+            const classList = Array.from(el.classList || []).join(' ');
+            if (classList.includes('badge') ||
+                classList.includes('count') ||
+                classList.includes('unread') ||
+                el.getAttribute('aria-label')?.toLowerCase().includes('unread')) {
+
+              const text = el.textContent?.trim() || el.getAttribute('aria-label') || '';
+              const match = text.match(/\\d+/);
+              if (match && parseInt(match[0]) < 1000) { // Sanity check to avoid timestamps
+                count = Math.max(count, parseInt(match[0]));
+              }
+            }
           }
 
-          // Method 3: Check page title again (some sites update it dynamically)
-          const titleMatch = document.title.match(/\\((\\d+)\\)/);
+          // Method 3: Check for material design badges (Google Chat uses Material)
+          const materialBadges = document.querySelectorAll('.mat-badge-content, [matbadge], .mdc-badge, span[role="status"]');
+          for (const badge of materialBadges) {
+            const text = badge.textContent?.trim() || badge.getAttribute('matbadge') || '';
+            const match = text.match(/^(\\d+)$/); // Exact number match
+            if (match) {
+              count = Math.max(count, parseInt(match[1]));
+            }
+          }
+
+          // Method 4: Check favicon for notification indicator
+          const favicon = document.querySelector('link[rel*="icon"]');
+          if (favicon && favicon.href.includes('notification')) {
+            count = count || 1;
+          }
+
+          // Method 5: Check page title for notification pattern (Messenger style)
+          const titleMatch = document.title.match(/^\\((\\d+)\\)/);
           if (titleMatch) {
             count = Math.max(count, parseInt(titleMatch[1]));
           }
@@ -205,8 +233,11 @@ function startDOMMonitoring(webview, serviceId) {
         if (count > 0) {
           console.log(`[${serviceId}] DOM found count:`, count);
           updateBadgeCount(serviceId, count);
+        } else {
+          // Clear badge if no count found
+          updateBadgeCount(serviceId, 0);
         }
-      }).catch(e => {
+      }).catch(() => {
         // Injection failed, that's okay
       });
     } catch (e) {

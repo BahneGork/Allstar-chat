@@ -196,10 +196,17 @@ ipcMain.handle('get-memory-info', async () => {
 
   // Get all process metrics (includes all Electron processes)
   const allProcessMetrics = app.getAppMetrics();
-  const totalMemory = allProcessMetrics.reduce((total, process) => {
-    return total + (process.memory?.workingSetSize || 0);
+
+  // workingSetSize is in KB on Windows, bytes on other platforms
+  // privateBytes gives us a more accurate Windows memory usage
+  const totalMemory = allProcessMetrics.reduce((total, proc) => {
+    // Use privateBytes if available (Windows), otherwise workingSetSize
+    const memoryValue = proc.memory?.privateBytes || proc.memory?.workingSetSize || 0;
+    return total + memoryValue;
   }, 0);
-  const totalMemoryMB = Math.round(totalMemory / 1024); // Convert KB to MB
+
+  // Convert to MB (privateBytes is in KB on Windows)
+  const totalMemoryMB = Math.round(totalMemory / 1024);
 
   return {
     app: {
@@ -231,7 +238,7 @@ app.on('activate', () => {
   }
 });
 
-app.on('before-quit', (event) => {
+app.on('before-quit', () => {
   app.isQuitting = true;
 
   // Force destroy all webviews immediately
