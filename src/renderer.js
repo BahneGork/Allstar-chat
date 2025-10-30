@@ -146,6 +146,13 @@ function createWebview(serviceId) {
     // Inject user agent to help with compatibility
     webview.setUserAgent(webview.getUserAgent() + ' AllStar/1.0');
 
+    // Test if JavaScript execution works
+    webview.executeJavaScript('document.title').then(title => {
+      console.log(`[${serviceId}] JavaScript execution works! Title: ${title}`);
+    }).catch(e => {
+      console.error(`[${serviceId}] JavaScript execution FAILED:`, e);
+    });
+
     // Start monitoring for title changes and DOM-based notifications
     startTitleMonitoring(webview, serviceId);
     startDOMMonitoring(webview, serviceId);
@@ -181,7 +188,9 @@ function startTitleMonitoring(webview, serviceId) {
 
 // Monitor DOM for notification elements
 function startDOMMonitoring(webview, serviceId) {
+  console.log(`[${serviceId}] Starting DOM monitoring interval...`);
   setInterval(() => {
+    console.log(`[${serviceId}] Running DOM check...`);
     try {
       // Inject code to check for notification badges in the page
       webview.executeJavaScript(`
