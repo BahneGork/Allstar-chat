@@ -101,17 +101,27 @@ let tray = null;
 function createTray(settings) {
   if (!settings.systemTray || tray) return;
 
-  const iconPath = path.join(__dirname, '../assets/icon.png');
+  // Try .ico first (preferred for Windows), then .png
+  const iconPaths = [
+    path.join(__dirname, '../assets/icon.ico'),
+    path.join(__dirname, '../assets/icon.png')
+  ];
 
-  // Check if icon exists and has content
-  try {
-    const stats = fs.statSync(iconPath);
-    if (stats.size === 0) {
-      console.warn('Icon file is empty, skipping tray creation');
-      return;
+  let iconPath = null;
+  for (const testPath of iconPaths) {
+    try {
+      const stats = fs.statSync(testPath);
+      if (stats.size > 0) {
+        iconPath = testPath;
+        break;
+      }
+    } catch (e) {
+      // File doesn't exist, try next
     }
-  } catch (e) {
-    console.warn('Icon file not found, skipping tray creation');
+  }
+
+  if (!iconPath) {
+    console.warn('No valid icon file found (tried icon.ico and icon.png), skipping tray creation');
     return;
   }
 
@@ -195,13 +205,26 @@ function createWindow() {
     app.commandLine.appendSwitch('disk-cache-size', cacheSizeBytes.toString());
   }
 
-  const iconPath = path.join(__dirname, '../assets/icon.png');
-  const hasValidIcon = fs.existsSync(iconPath) && fs.statSync(iconPath).size > 0;
+  // Try .ico first (preferred for Windows), then .png
+  const iconPaths = [
+    path.join(__dirname, '../assets/icon.ico'),
+    path.join(__dirname, '../assets/icon.png')
+  ];
+
+  let windowIcon = undefined;
+  for (const testPath of iconPaths) {
+    try {
+      if (fs.existsSync(testPath) && fs.statSync(testPath).size > 0) {
+        windowIcon = testPath;
+        break;
+      }
+    } catch (e) {}
+  }
 
   mainWindow = new BrowserWindow({
     width: bounds.width,
     height: bounds.height,
-    icon: hasValidIcon ? iconPath : undefined,
+    icon: windowIcon,
     webPreferences: {
       nodeIntegration: false,
       contextIsolation: true,
@@ -303,13 +326,26 @@ ipcMain.handle('show-notification', (_, title, body, serviceId) => {
   const settings = store.get('settings');
   if (!settings.notifications) return;
 
-  const iconPath = path.join(__dirname, '../assets/icon.png');
-  const hasValidIcon = fs.existsSync(iconPath) && fs.statSync(iconPath).size > 0;
+  // Try .ico first (preferred for Windows), then .png
+  const iconPaths = [
+    path.join(__dirname, '../assets/icon.ico'),
+    path.join(__dirname, '../assets/icon.png')
+  ];
+
+  let notificationIcon = undefined;
+  for (const testPath of iconPaths) {
+    try {
+      if (fs.existsSync(testPath) && fs.statSync(testPath).size > 0) {
+        notificationIcon = testPath;
+        break;
+      }
+    } catch (e) {}
+  }
 
   const notification = new Notification({
     title: title,
     body: body,
-    icon: hasValidIcon ? iconPath : undefined,
+    icon: notificationIcon,
     silent: false
   });
 
