@@ -408,7 +408,8 @@ ipcMain.handle('get-memory-info', async () => {
   const processBreakdown = {};
   allProcessMetrics.forEach(proc => {
     const type = proc.type;
-    const memMB = Math.round((proc.memory?.workingSetSize || 0) / 1024);
+    // Use privateBytes (private working set) which matches Task Manager's "Memory" column
+    const memMB = Math.round((proc.memory?.privateBytes || 0) / 1024);
     if (!processBreakdown[type]) {
       processBreakdown[type] = { count: 0, memory: 0 };
     }
@@ -421,10 +422,10 @@ ipcMain.handle('get-memory-info', async () => {
   });
 
   // Task Manager groups ALL processes under the main executable
-  // So we need to include everything: Browser, Renderer, GPU, Utility, etc.
-  // Use workingSetSize which matches Task Manager's "Memory" column
+  // Task Manager's "Memory" column shows Private Working Set (privateBytes)
+  // NOT total working set (workingSetSize) which includes shared memory
   const totalMemory = allProcessMetrics.reduce((total, proc) => {
-    const memoryValue = proc.memory?.workingSetSize || 0;
+    const memoryValue = proc.memory?.privateBytes || 0;
     return total + memoryValue;
   }, 0);
 
