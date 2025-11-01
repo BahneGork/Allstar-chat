@@ -404,11 +404,16 @@ ipcMain.handle('get-memory-info', async () => {
   const allProcessMetrics = app.getAppMetrics();
 
   // Log detailed per-process breakdown for comparison with Task Manager
-  console.log('[Memory] Detailed process list - ALL available memory metrics:');
+  console.log('[Memory] Detailed process list - Testing different conversions:');
   allProcessMetrics.forEach((proc, index) => {
     const mem = proc.memory || {};
     console.log(`  #${index + 1} ${proc.type} (PID: ${proc.pid}):`);
-    console.log(`    All available metrics:`, JSON.stringify(mem, null, 2));
+    console.log(`    privateBytes raw: ${mem.privateBytes} KB`);
+    console.log(`    privateBytes ÷1024: ${Math.round(mem.privateBytes / 1024)} MB`);
+    console.log(`    privateBytes ÷2048: ${Math.round(mem.privateBytes / 2048)} MB (testing /2)`);
+    console.log(`    workingSetSize raw: ${mem.workingSetSize} KB`);
+    console.log(`    workingSetSize ÷1024: ${Math.round(mem.workingSetSize / 1024)} MB`);
+    console.log(`    workingSetSize ÷2048: ${Math.round(mem.workingSetSize / 2048)} MB (testing /2)`);
   });
 
   // Summary by type
