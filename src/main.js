@@ -409,37 +409,52 @@ ipcMain.handle('get-memory-info', async () => {
 
   if (process.platform === 'win32') {
     try {
-      // Get the current process name (might be 'electron.exe' in dev or 'AllStar.exe' in production)
-      const processName = path.basename(process.execPath);
-      console.log(`[Memory] Querying for process: ${processName}`);
+      // Query both electron.exe and AllStar.exe (one will be present depending on dev/prod mode)
+      const processNames = ['electron.exe', 'AllStar.exe'];
 
-      // Use WMIC to get WorkingSetSize (Memory column in Task Manager)
-      const output = execSync(`wmic process where "name='${processName}'" get WorkingSetSize`, {
-        encoding: 'utf8',
-        timeout: 5000
-      });
+      for (const processName of processNames) {
+        try {
+          console.log(`[Memory] Trying to query: ${processName}`);
 
-      console.log('[Memory] WMIC raw output:', output);
+          const output = execSync(`wmic process where "name='${processName}'" get WorkingSetSize`, {
+            encoding: 'utf8',
+            timeout: 5000
+          });
 
-      // Parse the output - skip header line, sum all values
-      const lines = output.trim().split('\n').slice(1); // Skip "WorkingSetSize" header
-      console.log('[Memory] Lines to parse:', lines);
+          // Check if we got valid results (not "No Instance(s) Available")
+          if (output.includes('WorkingSetSize')) {
+            console.log(`[Memory] Found processes for ${processName}`);
 
-      totalMemoryMB = lines.reduce((sum, line) => {
-        const bytes = parseInt(line.trim());
-        console.log(`[Memory] Parsing line "${line.trim()}" -> ${bytes} bytes`);
-        if (!isNaN(bytes) && bytes > 0) {
-          const mb = Math.round(bytes / (1024 * 1024));
-          console.log(`[Memory] Adding ${mb} MB`);
-          return sum + mb;
+            // Parse the output - skip header line, sum all values
+            const lines = output.trim().split('\n').slice(1);
+
+            const memoryFromThisProcess = lines.reduce((sum, line) => {
+              const bytes = parseInt(line.trim());
+              if (!isNaN(bytes) && bytes > 0) {
+                const mb = Math.round(bytes / (1024 * 1024));
+                return sum + mb;
+              }
+              return sum;
+            }, 0);
+
+            console.log(`[Memory] ${processName}: ${memoryFromThisProcess} MB`);
+            totalMemoryMB += memoryFromThisProcess;
+          }
+        } catch (e) {
+          // Process not found, try next one
+          console.log(`[Memory] ${processName} not found, trying next...`);
         }
-        return sum;
-      }, 0);
+      }
 
-      console.log(`[Memory] Queried Windows directly: ${totalMemoryMB} MB`);
+      console.log(`[Memory] Total from Windows: ${totalMemoryMB} MB`);
+
+      // If we got 0, fall back to Electron API
+      if (totalMemoryMB === 0) {
+        console.log('[Memory] No processes found via WMIC, using Electron API fallback');
+        totalMemoryMB = Math.round(processMemory.rss / 1024 / 1024);
+      }
     } catch (error) {
       console.error('[Memory] Failed to query Windows:', error.message);
-      console.error('[Memory] Full error:', error);
       // Fallback to old calculation
       totalMemoryMB = Math.round(processMemory.rss / 1024 / 1024);
     }
