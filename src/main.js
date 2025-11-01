@@ -409,48 +409,40 @@ ipcMain.handle('get-memory-info', async () => {
 
   if (process.platform === 'win32') {
     try {
-      // Query both electron.exe and AllStar.exe (one will be present depending on dev/prod mode)
-      const processNames = ['electron.exe', 'AllStar.exe'];
+      // Get PIDs of only OUR processes from Electron API
+      const ourPIDs = allProcessMetrics.map(p => p.pid);
+      console.log(`[Memory] Our process PIDs: ${ourPIDs.join(', ')}`);
 
-      for (const processName of processNames) {
-        try {
-          console.log(`[Memory] Trying to query: ${processName}`);
+      // Query Windows for memory of only our specific PIDs
+      const pidList = ourPIDs.join(' OR ProcessId=');
+      const output = execSync(`wmic process where "ProcessId=${pidList}" get ProcessId,WorkingSetSize`, {
+        encoding: 'utf8',
+        timeout: 5000
+      });
 
-          const output = execSync(`wmic process where "name='${processName}'" get WorkingSetSize`, {
-            encoding: 'utf8',
-            timeout: 5000
-          });
+      console.log(`[Memory] WMIC output for our PIDs:`);
 
-          // Check if we got valid results (not "No Instance(s) Available")
-          if (output.includes('WorkingSetSize')) {
-            console.log(`[Memory] Found processes for ${processName}`);
+      // Parse the output
+      const lines = output.trim().split('\n').slice(1); // Skip header
 
-            // Parse the output - skip header line, sum all values
-            const lines = output.trim().split('\n').slice(1);
-
-            const memoryFromThisProcess = lines.reduce((sum, line) => {
-              const bytes = parseInt(line.trim());
-              if (!isNaN(bytes) && bytes > 0) {
-                const mb = Math.round(bytes / (1024 * 1024));
-                return sum + mb;
-              }
-              return sum;
-            }, 0);
-
-            console.log(`[Memory] ${processName}: ${memoryFromThisProcess} MB`);
-            totalMemoryMB += memoryFromThisProcess;
+      lines.forEach(line => {
+        const parts = line.trim().split(/\s+/);
+        if (parts.length >= 2) {
+          const pid = parseInt(parts[0]);
+          const bytes = parseInt(parts[1]);
+          if (!isNaN(bytes) && bytes > 0) {
+            const mb = Math.round(bytes / (1024 * 1024));
+            console.log(`  PID ${pid}: ${mb} MB`);
+            totalMemoryMB += mb;
           }
-        } catch (e) {
-          // Process not found, try next one
-          console.log(`[Memory] ${processName} not found, trying next...`);
         }
-      }
+      });
 
-      console.log(`[Memory] Total from Windows: ${totalMemoryMB} MB`);
+      console.log(`[Memory] Total from Windows (our processes only): ${totalMemoryMB} MB`);
 
       // If we got 0, fall back to Electron API
       if (totalMemoryMB === 0) {
-        console.log('[Memory] No processes found via WMIC, using Electron API fallback');
+        console.log('[Memory] WMIC query failed, using Electron API fallback');
         totalMemoryMB = Math.round(processMemory.rss / 1024 / 1024);
       }
     } catch (error) {
