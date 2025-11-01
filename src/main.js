@@ -410,25 +410,32 @@ ipcMain.handle('get-memory-info', async () => {
   if (process.platform === 'win32') {
     try {
       // Use WMIC to get WorkingSetSize (Memory column in Task Manager) for all AllStar processes
-      // This is the EXACT same source Task Manager uses
       const output = execSync('wmic process where "name=\'AllStar.exe\'" get WorkingSetSize', {
         encoding: 'utf8',
         timeout: 5000
       });
 
+      console.log('[Memory] WMIC raw output:', output);
+
       // Parse the output - skip header line, sum all values
       const lines = output.trim().split('\n').slice(1); // Skip "WorkingSetSize" header
+      console.log('[Memory] Lines to parse:', lines);
+
       totalMemoryMB = lines.reduce((sum, line) => {
         const bytes = parseInt(line.trim());
+        console.log(`[Memory] Parsing line "${line.trim()}" -> ${bytes} bytes`);
         if (!isNaN(bytes) && bytes > 0) {
-          return sum + Math.round(bytes / (1024 * 1024)); // Convert bytes to MB
+          const mb = Math.round(bytes / (1024 * 1024));
+          console.log(`[Memory] Adding ${mb} MB`);
+          return sum + mb;
         }
         return sum;
       }, 0);
 
       console.log(`[Memory] Queried Windows directly: ${totalMemoryMB} MB`);
     } catch (error) {
-      console.error('[Memory] Failed to query Windows, falling back to Electron API:', error.message);
+      console.error('[Memory] Failed to query Windows:', error.message);
+      console.error('[Memory] Full error:', error);
       // Fallback to old calculation
       totalMemoryMB = Math.round(processMemory.rss / 1024 / 1024);
     }
