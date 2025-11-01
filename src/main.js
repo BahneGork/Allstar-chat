@@ -397,71 +397,47 @@ ipcMain.handle('show-notification', (_, title, body, serviceId) => {
 });
 
 ipcMain.handle('get-memory-info', async () => {
+  const { execSync } = require('child_process');
   const processMemory = process.memoryUsage();
   const systemMemory = process.getSystemMemoryInfo();
 
-  // Get all process metrics (includes all Electron processes)
+  // Get all process metrics from Electron (for process count)
   const allProcessMetrics = app.getAppMetrics();
 
-  // Log detailed per-process breakdown for comparison with Task Manager
-  console.log('[Memory] Detailed per-process (testing Tab with privateBytes ÷ 1024):');
-  allProcessMetrics.forEach((proc, index) => {
-    // Test: Tab processes with privateBytes ÷ 1024
-    let memMB;
-    if (proc.type === 'Tab') {
-      const priv = Math.round((proc.memory?.privateBytes || 0) / 1024);
-      const work = Math.round((proc.memory?.workingSetSize || 0) / 1024);
-      console.log(`  PID ${proc.pid} (${proc.type}): Private÷1024=${priv} MB, Working÷1024=${work} MB`);
-      memMB = priv; // Try private
-    } else if (proc.type === 'GPU') {
-      memMB = Math.round((proc.memory?.workingSetSize || 0) / 1024);
-      console.log(`  PID ${proc.pid} (${proc.type}): ${memMB} MB`);
-    } else {
-      memMB = Math.round((proc.memory?.privateBytes || 0) / 2048);
-      console.log(`  PID ${proc.pid} (${proc.type}): ${memMB} MB`);
+  // Query Windows directly for accurate memory values (same as Task Manager)
+  let totalMemoryMB = 0;
+
+  if (process.platform === 'win32') {
+    try {
+      // Use WMIC to get WorkingSetSize (Memory column in Task Manager) for all AllStar processes
+      // This is the EXACT same source Task Manager uses
+      const output = execSync('wmic process where "name=\'AllStar.exe\'" get WorkingSetSize', {
+        encoding: 'utf8',
+        timeout: 5000
+      });
+
+      // Parse the output - skip header line, sum all values
+      const lines = output.trim().split('\n').slice(1); // Skip "WorkingSetSize" header
+      totalMemoryMB = lines.reduce((sum, line) => {
+        const bytes = parseInt(line.trim());
+        if (!isNaN(bytes) && bytes > 0) {
+          return sum + Math.round(bytes / (1024 * 1024)); // Convert bytes to MB
+        }
+        return sum;
+      }, 0);
+
+      console.log(`[Memory] Queried Windows directly: ${totalMemoryMB} MB`);
+    } catch (error) {
+      console.error('[Memory] Failed to query Windows, falling back to Electron API:', error.message);
+      // Fallback to old calculation
+      totalMemoryMB = Math.round(processMemory.rss / 1024 / 1024);
     }
-  });
+  } else {
+    // Non-Windows fallback
+    totalMemoryMB = Math.round(processMemory.rss / 1024 / 1024);
+  }
 
-  console.log('[Memory] Process breakdown by type:');
-  const processBreakdown = {};
-  allProcessMetrics.forEach(proc => {
-    const type = proc.type;
-
-    // Testing: Tab uses privateBytes ÷ 1024
-    let memMB;
-    if (type === 'Tab') {
-      memMB = Math.round((proc.memory?.privateBytes || 0) / 1024);
-    } else if (type === 'GPU') {
-      memMB = Math.round((proc.memory?.workingSetSize || 0) / 1024);
-    } else {
-      memMB = Math.round((proc.memory?.privateBytes || 0) / 2048);
-    }
-
-    if (!processBreakdown[type]) {
-      processBreakdown[type] = { count: 0, memory: 0 };
-    }
-    processBreakdown[type].count++;
-    processBreakdown[type].memory += memMB;
-  });
-
-  Object.entries(processBreakdown).forEach(([type, stats]) => {
-    console.log(`  ${type}: ${stats.count} process(es), ${stats.memory} MB`);
-  });
-
-  // Calculate total - testing Tab with privateBytes ÷ 1024
-  const totalMemoryMB = allProcessMetrics.reduce((total, proc) => {
-    let memMB;
-    if (proc.type === 'Tab') {
-      memMB = Math.round((proc.memory?.privateBytes || 0) / 1024);
-    } else if (proc.type === 'GPU') {
-      memMB = Math.round((proc.memory?.workingSetSize || 0) / 1024);
-    } else {
-      memMB = Math.round((proc.memory?.privateBytes || 0) / 2048);
-    }
-    return total + memMB;
-  }, 0);
-
-  console.log(`[Memory] Total calculated: ${totalMemoryMB} MB (from ${allProcessMetrics.length} processes)`);
+  console.log(`[Memory] Total from Windows API: ${totalMemoryMB} MB (from ${allProcessMetrics.length} processes)`);
 
   return {
     app: {
