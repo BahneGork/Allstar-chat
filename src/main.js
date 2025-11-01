@@ -414,29 +414,41 @@ ipcMain.handle('get-memory-info', async () => {
       console.log(`[Memory] Our process PIDs: ${ourPIDs.join(', ')}`);
 
       // Query Windows for memory of only our specific PIDs
+      // Try PrivatePageCount which might match Task Manager better
       const pidList = ourPIDs.join(' OR ProcessId=');
-      const output = execSync(`wmic process where "ProcessId=${pidList}" get ProcessId,WorkingSetSize`, {
+      const output = execSync(`wmic process where "ProcessId=${pidList}" get ProcessId,WorkingSetSize,PrivatePageCount`, {
         encoding: 'utf8',
         timeout: 5000
       });
 
-      console.log(`[Memory] WMIC output for our PIDs:`);
+      console.log(`[Memory] WMIC output (comparing WorkingSetSize vs PrivatePageCount):`);
 
       // Parse the output
       const lines = output.trim().split('\n').slice(1); // Skip header
+      let totalPrivate = 0;
+      let totalWorking = 0;
 
       lines.forEach(line => {
         const parts = line.trim().split(/\s+/);
-        if (parts.length >= 2) {
+        if (parts.length >= 3) {
           const pid = parseInt(parts[0]);
-          const bytes = parseInt(parts[1]);
-          if (!isNaN(bytes) && bytes > 0) {
-            const mb = Math.round(bytes / (1024 * 1024));
-            console.log(`  PID ${pid}: ${mb} MB`);
-            totalMemoryMB += mb;
+          const privateBytes = parseInt(parts[1]);
+          const workingBytes = parseInt(parts[2]);
+
+          if (!isNaN(privateBytes) && !isNaN(workingBytes)) {
+            const privateMB = Math.round(privateBytes / (1024 * 1024));
+            const workingMB = Math.round(workingBytes / (1024 * 1024));
+            console.log(`  PID ${pid}: Private=${privateMB} MB, Working=${workingMB} MB`);
+            totalPrivate += privateMB;
+            totalWorking += workingMB;
           }
         }
       });
+
+      console.log(`[Memory] Total Private: ${totalPrivate} MB, Total Working: ${totalWorking} MB`);
+
+      // Use Private memory (closer to Task Manager in most cases)
+      totalMemoryMB = totalPrivate;
 
       console.log(`[Memory] Total from Windows (our processes only): ${totalMemoryMB} MB`);
 
