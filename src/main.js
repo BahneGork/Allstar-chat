@@ -404,7 +404,13 @@ ipcMain.handle('get-memory-info', async () => {
   const allProcessMetrics = app.getAppMetrics();
 
   // Log detailed per-process breakdown for comparison with Task Manager
-  console.log('[Memory] Process breakdown:');
+  console.log('[Memory] Detailed per-process (compare with Task Manager):');
+  allProcessMetrics.forEach((proc, index) => {
+    const memMB = Math.round((proc.memory?.privateBytes || 0) / 2048);
+    console.log(`  PID ${proc.pid} (${proc.type}): ${memMB} MB`);
+  });
+
+  console.log('[Memory] Process breakdown by type:');
   const processBreakdown = {};
   allProcessMetrics.forEach(proc => {
     const type = proc.type;
