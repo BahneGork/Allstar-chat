@@ -418,7 +418,8 @@ ipcMain.handle('get-memory-info', async () => {
       const pidList = ourPIDs.join(' OR IDProcess=');
       const output = execSync(`wmic path Win32_PerfRawData_PerfProc_Process where "IDProcess=${pidList}" get IDProcess,WorkingSetPrivate /format:csv`, {
         encoding: 'utf8',
-        timeout: 5000
+        timeout: 15000,  // Increased to 15 seconds - perf counters are slower
+        maxBuffer: 10 * 1024 * 1024  // 10MB buffer
       });
 
       console.log(`[Memory] WMIC CSV output:`);
