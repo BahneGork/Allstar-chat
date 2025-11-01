@@ -404,17 +404,22 @@ ipcMain.handle('get-memory-info', async () => {
   const allProcessMetrics = app.getAppMetrics();
 
   // Log detailed per-process breakdown for comparison with Task Manager
-  console.log('[Memory] Detailed per-process (compare with Task Manager):');
+  console.log('[Memory] Detailed per-process (testing Tab with privateBytes ÷ 1024):');
   allProcessMetrics.forEach((proc, index) => {
-    // Browser/Utility: use privateBytes ÷ 2048
-    // Tab/GPU: use workingSetSize ÷ 1024 (these match better)
+    // Test: Tab processes with privateBytes ÷ 1024
     let memMB;
-    if (proc.type === 'Tab' || proc.type === 'GPU') {
+    if (proc.type === 'Tab') {
+      const priv = Math.round((proc.memory?.privateBytes || 0) / 1024);
+      const work = Math.round((proc.memory?.workingSetSize || 0) / 1024);
+      console.log(`  PID ${proc.pid} (${proc.type}): Private÷1024=${priv} MB, Working÷1024=${work} MB`);
+      memMB = priv; // Try private
+    } else if (proc.type === 'GPU') {
       memMB = Math.round((proc.memory?.workingSetSize || 0) / 1024);
+      console.log(`  PID ${proc.pid} (${proc.type}): ${memMB} MB`);
     } else {
       memMB = Math.round((proc.memory?.privateBytes || 0) / 2048);
+      console.log(`  PID ${proc.pid} (${proc.type}): ${memMB} MB`);
     }
-    console.log(`  PID ${proc.pid} (${proc.type}): ${memMB} MB`);
   });
 
   console.log('[Memory] Process breakdown by type:');
@@ -422,11 +427,11 @@ ipcMain.handle('get-memory-info', async () => {
   allProcessMetrics.forEach(proc => {
     const type = proc.type;
 
-    // Different process types report memory differently:
-    // - Browser/Utility processes: privateBytes ÷ 2048 matches Task Manager
-    // - Tab/GPU processes: workingSetSize ÷ 1024 matches Task Manager better
+    // Testing: Tab uses privateBytes ÷ 1024
     let memMB;
-    if (type === 'Tab' || type === 'GPU') {
+    if (type === 'Tab') {
+      memMB = Math.round((proc.memory?.privateBytes || 0) / 1024);
+    } else if (type === 'GPU') {
       memMB = Math.round((proc.memory?.workingSetSize || 0) / 1024);
     } else {
       memMB = Math.round((proc.memory?.privateBytes || 0) / 2048);
@@ -443,11 +448,12 @@ ipcMain.handle('get-memory-info', async () => {
     console.log(`  ${type}: ${stats.count} process(es), ${stats.memory} MB`);
   });
 
-  // Task Manager groups ALL processes under the main executable
-  // Calculate total using appropriate metric per process type
+  // Calculate total - testing Tab with privateBytes ÷ 1024
   const totalMemoryMB = allProcessMetrics.reduce((total, proc) => {
     let memMB;
-    if (proc.type === 'Tab' || proc.type === 'GPU') {
+    if (proc.type === 'Tab') {
+      memMB = Math.round((proc.memory?.privateBytes || 0) / 1024);
+    } else if (proc.type === 'GPU') {
       memMB = Math.round((proc.memory?.workingSetSize || 0) / 1024);
     } else {
       memMB = Math.round((proc.memory?.privateBytes || 0) / 2048);
