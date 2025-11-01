@@ -423,7 +423,7 @@ ipcMain.handle('get-memory-info', async () => {
       console.log(`[Memory] WMIC CSV output:`);
       console.log(output);
 
-      // Parse CSV output (format: Node,PID,Private,Working)
+      // Parse CSV output (format: Node,PrivatePageCount,ProcessId,WorkingSetSize)
       const lines = output.trim().split('\n').slice(1); // Skip header
       let totalPrivate = 0;
       let totalWorking = 0;
@@ -433,9 +433,9 @@ ipcMain.handle('get-memory-info', async () => {
 
         const parts = line.split(',');
         if (parts.length >= 4) {
-          const pid = parseInt(parts[1]);
-          const privateBytes = parseInt(parts[2]);
-          const workingBytes = parseInt(parts[3]);
+          const privateBytes = parseInt(parts[1]);  // Column 1: PrivatePageCount
+          const pid = parseInt(parts[2]);           // Column 2: ProcessId
+          const workingBytes = parseInt(parts[3]);  // Column 3: WorkingSetSize
 
           if (!isNaN(pid) && !isNaN(privateBytes) && !isNaN(workingBytes)) {
             const privateMB = Math.round(privateBytes / (1024 * 1024));
