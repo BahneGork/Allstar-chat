@@ -404,24 +404,14 @@ ipcMain.handle('get-memory-info', async () => {
   const allProcessMetrics = app.getAppMetrics();
 
   // Log detailed per-process breakdown for comparison with Task Manager
-  console.log('[Memory] Detailed process list - Testing different conversions:');
-  allProcessMetrics.forEach((proc, index) => {
-    const mem = proc.memory || {};
-    console.log(`  #${index + 1} ${proc.type} (PID: ${proc.pid}):`);
-    console.log(`    privateBytes raw: ${mem.privateBytes} KB`);
-    console.log(`    privateBytes ÷1024: ${Math.round(mem.privateBytes / 1024)} MB`);
-    console.log(`    privateBytes ÷2048: ${Math.round(mem.privateBytes / 2048)} MB (testing /2)`);
-    console.log(`    workingSetSize raw: ${mem.workingSetSize} KB`);
-    console.log(`    workingSetSize ÷1024: ${Math.round(mem.workingSetSize / 1024)} MB`);
-    console.log(`    workingSetSize ÷2048: ${Math.round(mem.workingSetSize / 2048)} MB (testing /2)`);
-  });
-
-  // Summary by type
-  console.log('[Memory] Summary by type:');
+  console.log('[Memory] Process breakdown:');
   const processBreakdown = {};
   allProcessMetrics.forEach(proc => {
     const type = proc.type;
-    const privateBytesMB = Math.round((proc.memory?.privateBytes || 0) / 1024);
+    // IMPORTANT: Despite documentation saying values are in KB, testing shows
+    // we need to divide by 2048 (not 1024) to match Task Manager values.
+    // This suggests the values are in 512-byte pages or similar units.
+    const privateBytesMB = Math.round((proc.memory?.privateBytes || 0) / 2048);
 
     if (!processBreakdown[type]) {
       processBreakdown[type] = { count: 0, memory: 0 };
@@ -436,14 +426,14 @@ ipcMain.handle('get-memory-info', async () => {
 
   // Task Manager groups ALL processes under the main executable
   // Task Manager's "Memory" column shows Private Working Set (privateBytes)
-  // NOT total working set (workingSetSize) which includes shared memory
+  // Values appear to be in 512-byte units, not KB as documented
   const totalMemory = allProcessMetrics.reduce((total, proc) => {
     const memoryValue = proc.memory?.privateBytes || 0;
     return total + memoryValue;
   }, 0);
 
-  // Convert KB to MB
-  const totalMemoryMB = Math.round(totalMemory / 1024);
+  // Convert to MB using /2048 to match Task Manager
+  const totalMemoryMB = Math.round(totalMemory / 2048);
 
   console.log(`[Memory] Total calculated: ${totalMemoryMB} MB (from ${allProcessMetrics.length} processes)`);
 
