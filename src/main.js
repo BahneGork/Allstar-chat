@@ -409,8 +409,12 @@ ipcMain.handle('get-memory-info', async () => {
 
   if (process.platform === 'win32') {
     try {
-      // Use WMIC to get WorkingSetSize (Memory column in Task Manager) for all AllStar processes
-      const output = execSync('wmic process where "name=\'AllStar.exe\'" get WorkingSetSize', {
+      // Get the current process name (might be 'electron.exe' in dev or 'AllStar.exe' in production)
+      const processName = path.basename(process.execPath);
+      console.log(`[Memory] Querying for process: ${processName}`);
+
+      // Use WMIC to get WorkingSetSize (Memory column in Task Manager)
+      const output = execSync(`wmic process where "name='${processName}'" get WorkingSetSize`, {
         encoding: 'utf8',
         timeout: 5000
       });
