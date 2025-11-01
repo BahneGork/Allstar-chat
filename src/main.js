@@ -324,7 +324,18 @@ ipcMain.handle('update-services', (_, services) => {
 
 ipcMain.handle('show-notification', (_, title, body, serviceId) => {
   const settings = store.get('settings');
-  if (!settings.notifications) return;
+  if (!settings.notifications) {
+    console.log('Notifications disabled in settings');
+    return;
+  }
+
+  // Check if notifications are supported
+  if (!Notification.isSupported()) {
+    console.error('Notifications are not supported on this system');
+    return;
+  }
+
+  console.log(`[Notification] Creating notification: ${title} - ${body}`);
 
   // Try .ico first (preferred for Windows), then .png
   const iconPaths = [
@@ -337,32 +348,52 @@ ipcMain.handle('show-notification', (_, title, body, serviceId) => {
     try {
       if (fs.existsSync(testPath) && fs.statSync(testPath).size > 0) {
         notificationIcon = testPath;
+        console.log(`[Notification] Using icon: ${testPath}`);
         break;
       }
     } catch (e) {}
   }
 
-  const notification = new Notification({
-    title: title,
-    body: body,
-    icon: notificationIcon,
-    silent: false
-  });
+  try {
+    const notification = new Notification({
+      title: title,
+      body: body,
+      icon: notificationIcon,
+      silent: false,
+      timeoutType: 'default'
+    });
 
-  notification.on('click', () => {
-    if (mainWindow) {
-      mainWindow.show();
-      mainWindow.focus();
-      // Switch to the service tab that triggered the notification
-      if (serviceId) {
-        mainWindow.webContents.executeJavaScript(`
-          switchTab('${serviceId}');
-        `).catch(() => {});
+    notification.on('click', () => {
+      console.log('[Notification] Notification clicked');
+      if (mainWindow) {
+        mainWindow.show();
+        mainWindow.focus();
+        // Switch to the service tab that triggered the notification
+        if (serviceId) {
+          mainWindow.webContents.executeJavaScript(`
+            switchTab('${serviceId}');
+          `).catch(() => {});
+        }
       }
-    }
-  });
+    });
 
-  notification.show();
+    notification.on('show', () => {
+      console.log('[Notification] Notification shown successfully');
+    });
+
+    notification.on('close', () => {
+      console.log('[Notification] Notification closed');
+    });
+
+    notification.on('failed', (error) => {
+      console.error('[Notification] Failed to show notification:', error);
+    });
+
+    notification.show();
+    console.log('[Notification] show() called');
+  } catch (error) {
+    console.error('[Notification] Error creating/showing notification:', error);
+  }
 });
 
 ipcMain.handle('get-memory-info', async () => {

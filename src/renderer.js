@@ -324,11 +324,13 @@ function updateBadgeCount(serviceId, count) {
     badge.style.display = 'inline-flex';
 
     // Show notification if count increased and tab is not active
+    console.log(`[${serviceId}] Notification check: count=${count}, prev=${previousCount}, active=${serviceId === activeTabId}, enabled=${currentSettings.notifications}`);
     if (count > previousCount && serviceId !== activeTabId && currentSettings.notifications) {
       const service = currentServices.find(s => s.id === serviceId);
       if (service) {
         const serviceName = service.name;
         const messageCount = count > 99 ? '99+' : count;
+        console.log(`[${serviceId}] Triggering notification: ${serviceName} - ${messageCount} messages`);
         window.electron.showNotification(
           serviceName,
           `${messageCount} unread message${count > 1 ? 's' : ''}`,
@@ -415,11 +417,22 @@ function setupEventListeners() {
   document.getElementById('settings-btn').addEventListener('click', openSettings);
   document.getElementById('close-settings').addEventListener('click', closeSettings);
   document.getElementById('save-settings').addEventListener('click', saveSettings);
+  document.getElementById('test-notification-btn').addEventListener('click', testNotification);
 
   // Memory monitor
   document.getElementById('memory-btn').addEventListener('click', openMemoryMonitor);
   document.getElementById('close-memory').addEventListener('click', closeMemoryMonitor);
   document.getElementById('refresh-memory').addEventListener('click', updateMemoryStats);
+}
+
+// Test notification
+function testNotification() {
+  console.log('Test notification button clicked');
+  window.electron.showNotification(
+    'AllStar Test',
+    'This is a test notification to verify the system is working!',
+    null
+  );
 }
 
 // Settings modal
