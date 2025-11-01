@@ -406,7 +406,14 @@ ipcMain.handle('get-memory-info', async () => {
   // Log detailed per-process breakdown for comparison with Task Manager
   console.log('[Memory] Detailed per-process (compare with Task Manager):');
   allProcessMetrics.forEach((proc, index) => {
-    const memMB = Math.round((proc.memory?.privateBytes || 0) / 2048);
+    // Browser/Utility: use privateBytes ÷ 2048
+    // Tab/GPU: use workingSetSize ÷ 1024 (these match better)
+    let memMB;
+    if (proc.type === 'Tab' || proc.type === 'GPU') {
+      memMB = Math.round((proc.memory?.workingSetSize || 0) / 1024);
+    } else {
+      memMB = Math.round((proc.memory?.privateBytes || 0) / 2048);
+    }
     console.log(`  PID ${proc.pid} (${proc.type}): ${memMB} MB`);
   });
 
@@ -414,16 +421,22 @@ ipcMain.handle('get-memory-info', async () => {
   const processBreakdown = {};
   allProcessMetrics.forEach(proc => {
     const type = proc.type;
-    // IMPORTANT: Despite documentation saying values are in KB, testing shows
-    // we need to divide by 2048 (not 1024) to match Task Manager values.
-    // This suggests the values are in 512-byte pages or similar units.
-    const privateBytesMB = Math.round((proc.memory?.privateBytes || 0) / 2048);
+
+    // Different process types report memory differently:
+    // - Browser/Utility processes: privateBytes ÷ 2048 matches Task Manager
+    // - Tab/GPU processes: workingSetSize ÷ 1024 matches Task Manager better
+    let memMB;
+    if (type === 'Tab' || type === 'GPU') {
+      memMB = Math.round((proc.memory?.workingSetSize || 0) / 1024);
+    } else {
+      memMB = Math.round((proc.memory?.privateBytes || 0) / 2048);
+    }
 
     if (!processBreakdown[type]) {
       processBreakdown[type] = { count: 0, memory: 0 };
     }
     processBreakdown[type].count++;
-    processBreakdown[type].memory += privateBytesMB;
+    processBreakdown[type].memory += memMB;
   });
 
   Object.entries(processBreakdown).forEach(([type, stats]) => {
@@ -431,15 +444,16 @@ ipcMain.handle('get-memory-info', async () => {
   });
 
   // Task Manager groups ALL processes under the main executable
-  // Task Manager's "Memory" column shows Private Working Set (privateBytes)
-  // Values appear to be in 512-byte units, not KB as documented
-  const totalMemory = allProcessMetrics.reduce((total, proc) => {
-    const memoryValue = proc.memory?.privateBytes || 0;
-    return total + memoryValue;
+  // Calculate total using appropriate metric per process type
+  const totalMemoryMB = allProcessMetrics.reduce((total, proc) => {
+    let memMB;
+    if (proc.type === 'Tab' || proc.type === 'GPU') {
+      memMB = Math.round((proc.memory?.workingSetSize || 0) / 1024);
+    } else {
+      memMB = Math.round((proc.memory?.privateBytes || 0) / 2048);
+    }
+    return total + memMB;
   }, 0);
-
-  // Convert to MB using /2048 to match Task Manager
-  const totalMemoryMB = Math.round(totalMemory / 2048);
 
   console.log(`[Memory] Total calculated: ${totalMemoryMB} MB (from ${allProcessMetrics.length} processes)`);
 
