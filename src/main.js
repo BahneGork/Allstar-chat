@@ -403,18 +403,26 @@ ipcMain.handle('get-memory-info', async () => {
   // Get all process metrics (includes all Electron processes)
   const allProcessMetrics = app.getAppMetrics();
 
-  // Log all process types for debugging
-  console.log('[Memory] Process breakdown:');
+  // Log detailed per-process breakdown for comparison with Task Manager
+  console.log('[Memory] Detailed process list (compare with Task Manager):');
+  allProcessMetrics.forEach((proc, index) => {
+    const privateBytesMB = Math.round((proc.memory?.privateBytes || 0) / 1024);
+    const workingSetMB = Math.round((proc.memory?.workingSetSize || 0) / 1024);
+    console.log(`  #${index + 1} ${proc.type} (PID: ${proc.pid}): Private=${privateBytesMB} MB, Working=${workingSetMB} MB`);
+  });
+
+  // Summary by type
+  console.log('[Memory] Summary by type:');
   const processBreakdown = {};
   allProcessMetrics.forEach(proc => {
     const type = proc.type;
-    // Use privateBytes (private working set) which matches Task Manager's "Memory" column
-    const memMB = Math.round((proc.memory?.privateBytes || 0) / 1024);
+    const privateBytesMB = Math.round((proc.memory?.privateBytes || 0) / 1024);
+
     if (!processBreakdown[type]) {
       processBreakdown[type] = { count: 0, memory: 0 };
     }
     processBreakdown[type].count++;
-    processBreakdown[type].memory += memMB;
+    processBreakdown[type].memory += privateBytesMB;
   });
 
   Object.entries(processBreakdown).forEach(([type, stats]) => {
