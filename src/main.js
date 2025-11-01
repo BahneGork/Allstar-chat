@@ -413,29 +413,31 @@ ipcMain.handle('get-memory-info', async () => {
       const ourPIDs = allProcessMetrics.map(p => p.pid);
       console.log(`[Memory] Our process PIDs: ${ourPIDs.join(', ')}`);
 
-      // Query Windows for memory of only our specific PIDs
-      // Try PrivatePageCount which might match Task Manager better
+      // Query Windows for memory - use CSV format for reliable parsing
       const pidList = ourPIDs.join(' OR ProcessId=');
-      const output = execSync(`wmic process where "ProcessId=${pidList}" get ProcessId,WorkingSetSize,PrivatePageCount`, {
+      const output = execSync(`wmic process where "ProcessId=${pidList}" get ProcessId,PrivatePageCount,WorkingSetSize /format:csv`, {
         encoding: 'utf8',
         timeout: 5000
       });
 
-      console.log(`[Memory] WMIC output (comparing WorkingSetSize vs PrivatePageCount):`);
+      console.log(`[Memory] WMIC CSV output:`);
+      console.log(output);
 
-      // Parse the output
+      // Parse CSV output (format: Node,PID,Private,Working)
       const lines = output.trim().split('\n').slice(1); // Skip header
       let totalPrivate = 0;
       let totalWorking = 0;
 
       lines.forEach(line => {
-        const parts = line.trim().split(/\s+/);
-        if (parts.length >= 3) {
-          const pid = parseInt(parts[0]);
-          const privateBytes = parseInt(parts[1]);
-          const workingBytes = parseInt(parts[2]);
+        if (!line.trim()) return;
 
-          if (!isNaN(privateBytes) && !isNaN(workingBytes)) {
+        const parts = line.split(',');
+        if (parts.length >= 4) {
+          const pid = parseInt(parts[1]);
+          const privateBytes = parseInt(parts[2]);
+          const workingBytes = parseInt(parts[3]);
+
+          if (!isNaN(pid) && !isNaN(privateBytes) && !isNaN(workingBytes)) {
             const privateMB = Math.round(privateBytes / (1024 * 1024));
             const workingMB = Math.round(workingBytes / (1024 * 1024));
             console.log(`  PID ${pid}: Private=${privateMB} MB, Working=${workingMB} MB`);
