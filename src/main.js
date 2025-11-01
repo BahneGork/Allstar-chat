@@ -413,9 +413,10 @@ ipcMain.handle('get-memory-info', async () => {
       const ourPIDs = allProcessMetrics.map(p => p.pid);
       console.log(`[Memory] Our process PIDs: ${ourPIDs.join(', ')}`);
 
-      // Query Windows for memory - use CSV format for reliable parsing
-      const pidList = ourPIDs.join(' OR ProcessId=');
-      const output = execSync(`wmic process where "ProcessId=${pidList}" get ProcessId,PrivatePageCount,WorkingSetSize /format:csv`, {
+      // Query Windows for WorkingSetPrivate - this is what Task Manager shows!
+      // Use Win32_PerfRawData_PerfProc_Process for WorkingSetPrivate property
+      const pidList = ourPIDs.join(' OR IDProcess=');
+      const output = execSync(`wmic path Win32_PerfRawData_PerfProc_Process where "IDProcess=${pidList}" get IDProcess,WorkingSetPrivate /format:csv`, {
         encoding: 'utf8',
         timeout: 5000
       });
@@ -423,34 +424,26 @@ ipcMain.handle('get-memory-info', async () => {
       console.log(`[Memory] WMIC CSV output:`);
       console.log(output);
 
-      // Parse CSV output (format: Node,PrivatePageCount,ProcessId,WorkingSetSize)
+      // Parse CSV output (format: Node,IDProcess,WorkingSetPrivate)
       const lines = output.trim().split('\n').slice(1); // Skip header
-      let totalPrivate = 0;
-      let totalWorking = 0;
 
       lines.forEach(line => {
         if (!line.trim()) return;
 
         const parts = line.split(',');
-        if (parts.length >= 4) {
-          const privateBytes = parseInt(parts[1]);  // Column 1: PrivatePageCount
-          const pid = parseInt(parts[2]);           // Column 2: ProcessId
-          const workingBytes = parseInt(parts[3]);  // Column 3: WorkingSetSize
+        if (parts.length >= 3) {
+          const pid = parseInt(parts[1]);                 // Column 1: IDProcess
+          const workingSetPrivate = parseInt(parts[2]);   // Column 2: WorkingSetPrivate
 
-          if (!isNaN(pid) && !isNaN(privateBytes) && !isNaN(workingBytes)) {
-            const privateMB = Math.round(privateBytes / (1024 * 1024));
-            const workingMB = Math.round(workingBytes / (1024 * 1024));
-            console.log(`  PID ${pid}: Private=${privateMB} MB, Working=${workingMB} MB`);
-            totalPrivate += privateMB;
-            totalWorking += workingMB;
+          if (!isNaN(pid) && !isNaN(workingSetPrivate)) {
+            const memMB = Math.round(workingSetPrivate / (1024 * 1024));
+            console.log(`  PID ${pid}: ${memMB} MB (WorkingSetPrivate)`);
+            totalMemoryMB += memMB;
           }
         }
       });
 
-      console.log(`[Memory] Total Private: ${totalPrivate} MB, Total Working: ${totalWorking} MB`);
-
-      // Use Private memory (closer to Task Manager in most cases)
-      totalMemoryMB = totalPrivate;
+      console.log(`[Memory] Total WorkingSetPrivate: ${totalMemoryMB} MB (matches Task Manager!)`);
 
       console.log(`[Memory] Total from Windows (our processes only): ${totalMemoryMB} MB`);
 
