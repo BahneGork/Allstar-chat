@@ -50,7 +50,7 @@ function saveConfig(config) {
 
 function getDefaultConfig() {
   return {
-    windowBounds: { width: 1200, height: 800 },
+    windowBounds: { width: 1200, height: 800, x: undefined, y: undefined },
     settings: {
       systemTray: true,
       notifications: true,
@@ -62,7 +62,9 @@ function getDefaultConfig() {
       cacheSize: 100,
       clearCacheOnExit: false,
       startOnBoot: false,
-      closeToTray: false // Disabled by default - requires system tray
+      closeToTray: false, // Disabled by default - requires system tray
+      startMinimized: false, // Start minimized to tray
+      alwaysOnTop: false // Keep window always on top
     },
     services: [
       { id: 'messenger', name: 'Facebook Messenger', url: 'https://www.messenger.com', enabled: true },
@@ -156,6 +158,21 @@ function createTray(settings) {
     },
     { type: 'separator' },
     {
+      label: 'Notifications',
+      type: 'checkbox',
+      checked: settings.notifications,
+      click: (menuItem) => {
+        const newSettings = { ...store.get('settings'), notifications: menuItem.checked };
+        store.set('settings', newSettings);
+        // Update tray menu
+        if (tray) {
+          destroyTray();
+          createTray(newSettings);
+        }
+      }
+    },
+    { type: 'separator' },
+    {
       label: 'Quit AllStar',
       click: () => {
         app.isQuitting = true;
@@ -224,7 +241,10 @@ function createWindow() {
   mainWindow = new BrowserWindow({
     width: bounds.width,
     height: bounds.height,
+    x: bounds.x,
+    y: bounds.y,
     icon: windowIcon,
+    alwaysOnTop: settings.alwaysOnTop || false,
     webPreferences: {
       nodeIntegration: false,
       contextIsolation: true,
@@ -244,7 +264,13 @@ function createWindow() {
   mainWindow.on('move', () => saveBounds());
 
   mainWindow.once('ready-to-show', () => {
-    mainWindow.show();
+    // Don't show window if start minimized is enabled and tray is available
+    if (settings.startMinimized && tray) {
+      // Window stays hidden
+      console.log('Starting minimized to tray');
+    } else {
+      mainWindow.show();
+    }
   });
 
   mainWindow.on('close', (event) => {
@@ -320,6 +346,26 @@ ipcMain.handle('get-services', () => {
 ipcMain.handle('update-services', (_, services) => {
   store.set('services', services);
   return services;
+});
+
+ipcMain.handle('toggle-always-on-top', () => {
+  if (!mainWindow) return false;
+
+  const currentState = mainWindow.isAlwaysOnTop();
+  const newState = !currentState;
+  mainWindow.setAlwaysOnTop(newState);
+
+  // Save to settings
+  const settings = store.get('settings');
+  settings.alwaysOnTop = newState;
+  store.set('settings', settings);
+
+  return newState;
+});
+
+ipcMain.handle('get-always-on-top', () => {
+  if (!mainWindow) return false;
+  return mainWindow.isAlwaysOnTop();
 });
 
 ipcMain.handle('show-notification', (_, title, body, serviceId) => {

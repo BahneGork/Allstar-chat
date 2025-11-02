@@ -13,6 +13,7 @@
     <div id="tab-bar">
       <div id="tabs"></div>
       <div id="tab-controls">
+        <button id="pin-btn" title="Always on Top">📌</button>
         <button id="settings-btn" title="Settings">⚙️</button>
         <button id="memory-btn" title="Memory Usage">📊</button>
       </div>
@@ -87,6 +88,16 @@
                   Start on Boot
                 </label>
                 <span class="memory-tip">No memory impact</span>
+              </div>
+            </div>
+
+            <div class="setting-item">
+              <div class="setting-info">
+                <label>
+                  <input type="checkbox" id="setting-startMinimized">
+                  Start Minimized to Tray
+                </label>
+                <span class="memory-tip">Requires System Tray enabled</span>
               </div>
             </div>
           </div>

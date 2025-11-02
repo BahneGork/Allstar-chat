@@ -413,6 +413,9 @@ function resumeTab(serviceId) {
 
 // Event listeners
 function setupEventListeners() {
+  // Pin button (Always on Top)
+  document.getElementById('pin-btn').addEventListener('click', toggleAlwaysOnTop);
+
   // Settings button
   document.getElementById('settings-btn').addEventListener('click', openSettings);
   document.getElementById('close-settings').addEventListener('click', closeSettings);
@@ -423,6 +426,9 @@ function setupEventListeners() {
   document.getElementById('memory-btn').addEventListener('click', openMemoryMonitor);
   document.getElementById('close-memory').addEventListener('click', closeMemoryMonitor);
   document.getElementById('refresh-memory').addEventListener('click', updateMemoryStats);
+
+  // Update pin button state on load
+  updatePinButtonState();
 }
 
 // Test notification
@@ -433,6 +439,27 @@ function testNotification() {
     'This is a test notification to verify the system is working!',
     null
   );
+}
+
+// Always on top toggle
+async function toggleAlwaysOnTop() {
+  const newState = await window.electron.toggleAlwaysOnTop();
+  updatePinButtonState(newState);
+}
+
+async function updatePinButtonState(state) {
+  const pinBtn = document.getElementById('pin-btn');
+  if (state === undefined) {
+    state = await window.electron.getAlwaysOnTop();
+  }
+
+  if (state) {
+    pinBtn.style.background = '#007acc';
+    pinBtn.style.color = '#fff';
+  } else {
+    pinBtn.style.background = '';
+    pinBtn.style.color = '';
+  }
 }
 
 // Settings modal
@@ -446,6 +473,7 @@ async function openSettings() {
   document.getElementById('setting-systemTray').checked = currentSettings.systemTray;
   document.getElementById('setting-closeToTray').checked = currentSettings.closeToTray;
   document.getElementById('setting-startOnBoot').checked = currentSettings.startOnBoot;
+  document.getElementById('setting-startMinimized').checked = currentSettings.startMinimized;
   document.getElementById('setting-notifications').checked = currentSettings.notifications;
   document.getElementById('setting-hardwareAcceleration').checked = currentSettings.hardwareAcceleration;
   document.getElementById('setting-preloadServices').checked = currentSettings.preloadServices;
@@ -483,6 +511,7 @@ async function saveSettings() {
     systemTray: document.getElementById('setting-systemTray').checked,
     closeToTray: document.getElementById('setting-closeToTray').checked,
     startOnBoot: document.getElementById('setting-startOnBoot').checked,
+    startMinimized: document.getElementById('setting-startMinimized').checked,
     notifications: document.getElementById('setting-notifications').checked,
     hardwareAcceleration: document.getElementById('setting-hardwareAcceleration').checked,
     preloadServices: document.getElementById('setting-preloadServices').checked,
