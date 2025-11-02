@@ -8,8 +8,12 @@ A lightweight, memory-efficient all-in-one messenger app for Windows.
 - **Tabbed Interface**: Switch between Messenger and Google Chat seamlessly
 - **Smart Memory Management**: Auto-suspend inactive tabs, configurable timeouts
 - **Comprehensive Settings**: Control every aspect with memory impact tips
-- **Real-time Memory Monitor**: See exactly how much memory you're saving
-- **System Tray Integration**: Minimize to tray, close to tray options
+- **Real-time Memory Monitor**: Accurate memory tracking matching Windows Task Manager
+- **System Tray Integration**: Minimize to tray, close to tray, notification toggle in tray menu
+- **Desktop Notifications**: Native Windows notifications for new messages in background tabs
+- **Always on Top**: Quick-access pin button to keep window above other apps
+- **Window Position Memory**: Automatically restores window size and position
+- **Start Minimized**: Optional start minimized to system tray
 - **Persistent Sessions**: Stay logged in across restarts
 - **Hardware Acceleration**: Optional GPU acceleration for better performance
 - **Privacy Controls**: Clear cache on exit, control session persistence
@@ -60,10 +64,16 @@ These settings provide the best balance of performance and usability:
 - **Tab Suspension**: 30 minutes (saves ~70% memory per suspended tab)
 - **System Tray**: ON
 - **Close to Tray**: ON
+- **Start Minimized**: OFF (enable if you want silent startup)
 - **Notifications**: ON
 - **Hardware Acceleration**: ON
-- **Preload Services**: OFF
+- **Preload Services**: ON (faster tab switching, uses more memory)
 - **Cache Size**: 100MB
+
+### Quick Access Features
+- **📌 Pin Button**: Click the pin icon in the tab bar to toggle always-on-top mode
+- **🔔 Tray Notifications**: Right-click system tray icon to quickly enable/disable notifications
+- **📊 Memory Dashboard**: Displays accurate memory usage matching Task Manager values
 
 ## Memory Comparison
 
@@ -89,11 +99,13 @@ Built with:
 
 MIT
 
-## Notes
+## Technical Highlights
 
-- Icon placeholder: You'll need to replace `assets/icon.png` with an actual 256x256px PNG icon
-- System tray and notifications features are implemented in the settings but need additional electron modules for full functionality
-- Start on boot requires additional Windows registry configuration
+### Memory Monitoring Accuracy
+AllStar queries Windows Performance Counters directly using `Win32_PerfRawData_PerfProc_Process.WorkingSetPrivate` - the same metric Windows Task Manager displays. This ensures memory readings are accurate to within 1-2 MB. See [MEMORY-MONITORING-SOLUTION.md](MEMORY-MONITORING-SOLUTION.md) for technical details.
+
+### Design Files
+Source design files are stored in the `design/` folder with version control. See [design/README.md](design/README.md) for the workflow.
 
 ## Future Enhancements
 
@@ -102,4 +114,3 @@ MIT
 - Custom service URLs
 - Themes (light/dark mode)
 - Keyboard shortcuts
-- Badge counters for unread messages

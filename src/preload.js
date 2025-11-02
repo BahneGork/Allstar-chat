@@ -15,5 +15,9 @@ contextBridge.exposeInMainWorld('electron', {
   getMemoryInfo: () => ipcRenderer.invoke('get-memory-info'),
 
   // Notifications
-  showNotification: (title, body, serviceId) => ipcRenderer.invoke('show-notification', title, body, serviceId)
+  showNotification: (title, body, serviceId) => ipcRenderer.invoke('show-notification', title, body, serviceId),
+
+  // Window controls
+  toggleAlwaysOnTop: () => ipcRenderer.invoke('toggle-always-on-top'),
+  getAlwaysOnTop: () => ipcRenderer.invoke('get-always-on-top')
 });
