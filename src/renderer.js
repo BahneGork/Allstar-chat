@@ -304,7 +304,7 @@ function hideWordleAdPlaceholders(webview) {
             });
 
             // Look for and remove pz-moment and similar containers
-            const adContainers = document.querySelectorAll('.pz-moment, [class*="ad-"], [id*="ad-"]');
+            const adContainers = document.querySelectorAll('.pz-moment, [class*="ad-"], [id*="ad-"], [class*="adContainer"], [class*="Ad-module"]');
             console.log('[Wordle Ad Blocker] Found', adContainers.length, 'potential ad containers');
             adContainers.forEach(el => {
               // Don't remove if it contains the game
