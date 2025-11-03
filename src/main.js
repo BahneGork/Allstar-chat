@@ -568,7 +568,10 @@ function setupWordleAdBlocker() {
     'securepubads.g.doubleclick.net',
     'static.doubleclick.net',
     'nyt.com/ads',
-    'nytimes.com/ads'
+    'nytimes.com/ads',
+    'sentry.io',
+    'chartbeat.com',
+    'brandmetrics.com'
   ];
 
   // Block network requests to ad domains
