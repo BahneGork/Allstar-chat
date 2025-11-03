@@ -229,9 +229,9 @@ function injectWordleAdBlocker(webview) {
     [class*="AdSlot"],
     [id*="AdSlot"],
     div[data-ad-placeholder],
-    .css-1wbvk4p, /* NYT specific ad class */
-    .css-vurnku, /* NYT specific ad class */
-    #gateway-content, /* NYT paywall */
+    .css-1wbvk4p,
+    .css-vurnku,
+    #gateway-content,
     [data-testid="inline-message"],
     [data-testid="expanded-dock"],
     [data-testid="purr-ad"],
@@ -239,24 +239,52 @@ function injectWordleAdBlocker(webview) {
     [class*="AdUnit"],
     [id*="google_ads"],
     .place-bottom,
-    .place-top {
+    .place-top,
+    /* More aggressive ad blocking */
+    button[aria-label*="dvertisement"],
+    button[aria-label*="Advertisement"],
+    div[aria-label*="dvertisement"],
+    div[aria-label*="Advertisement"],
+    [class*="pz-ad"],
+    [class*="ad-slot"],
+    section[aria-label*="dvertisement"],
+    aside,
+    /* Specific NYT Wordle ad containers */
+    .pz-moment,
+    .pz-moment__ad,
+    #pz-moment,
+    [data-testid="pz-moment"],
+    .ad-wrapper,
+    .ad-rail,
+    #ad-rail {
       display: none !important;
       visibility: hidden !important;
       opacity: 0 !important;
       height: 0 !important;
       width: 0 !important;
+      max-height: 0 !important;
+      margin: 0 !important;
+      padding: 0 !important;
       position: absolute !important;
       left: -9999px !important;
+      overflow: hidden !important;
     }
 
-    /* Remove bottom ad space */
+    /* Remove bottom ad space and any spacing */
     body {
       padding-bottom: 0 !important;
+      margin-bottom: 0 !important;
     }
 
     /* Maximize game area */
     #wordle-app-game {
       max-height: 100vh !important;
+    }
+
+    /* Hide any element containing "advertisement" text */
+    button:has-text("dvertisement"),
+    div:has-text("dvertisement") {
+      display: none !important;
     }
   `;
 
@@ -270,6 +298,37 @@ function injectWordleAdBlocker(webview) {
         style.textContent = \`${adBlockerCSS}\`;
         document.head.appendChild(style);
 
+        // Aggressive ad removal function
+        function removeAds() {
+          // Remove elements with "advertisement" in aria-label
+          document.querySelectorAll('[aria-label*="dvertisement"]').forEach(el => {
+            console.log('[Wordle Ad Blocker] Removing aria-label ad:', el);
+            el.remove();
+          });
+
+          // Remove buttons/divs containing "advertisement" text
+          document.querySelectorAll('button, div, section, aside').forEach(el => {
+            if (el.textContent?.toLowerCase().includes('advertisement')) {
+              console.log('[Wordle Ad Blocker] Removing text-based ad:', el);
+              el.remove();
+            }
+          });
+
+          // Remove pz-moment containers (NYT ad system)
+          document.querySelectorAll('.pz-moment, [data-testid="pz-moment"], #pz-moment').forEach(el => {
+            console.log('[Wordle Ad Blocker] Removing pz-moment:', el);
+            el.remove();
+          });
+        }
+
+        // Run immediately
+        removeAds();
+
+        // Run again after a short delay to catch late-loading ads
+        setTimeout(removeAds, 1000);
+        setTimeout(removeAds, 2000);
+        setTimeout(removeAds, 3000);
+
         // Remove ad elements that get added dynamically
         const observer = new MutationObserver((mutations) => {
           mutations.forEach((mutation) => {
@@ -279,15 +338,26 @@ function injectWordleAdBlocker(webview) {
                 const isAd =
                   node.id?.includes('ad') ||
                   node.className?.includes('ad') ||
+                  node.className?.includes('pz-moment') ||
                   node.getAttribute('data-testid')?.includes('ad') ||
+                  node.getAttribute('aria-label')?.toLowerCase().includes('advertisement') ||
+                  node.textContent?.toLowerCase().includes('advertisement') ||
                   node.tagName === 'IFRAME' && (
                     node.src?.includes('doubleclick') ||
                     node.src?.includes('googlesyndication')
                   );
 
                 if (isAd) {
-                  console.log('[Wordle Ad Blocker] Removing ad element:', node);
+                  console.log('[Wordle Ad Blocker] Removing dynamically added ad:', node);
                   node.remove();
+                }
+
+                // Also check child elements
+                if (node.querySelectorAll) {
+                  node.querySelectorAll('[aria-label*="dvertisement"], .pz-moment, [class*="ad-"]').forEach(child => {
+                    console.log('[Wordle Ad Blocker] Removing nested ad:', child);
+                    child.remove();
+                  });
                 }
               }
             });
