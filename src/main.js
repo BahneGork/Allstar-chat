@@ -1,8 +1,6 @@
 const { app, BrowserWindow, ipcMain, nativeImage, Tray, Menu, Notification, session } = require('electron');
 const path = require('path');
 const fs = require('fs');
-const { ElectronBlocker } = require('@ghostery/adblocker-electron');
-const fetch = require('cross-fetch');
 
 // Set app name for Task Manager (multiple methods for Windows compatibility)
 app.setName('AllStar');
@@ -551,24 +549,48 @@ ipcMain.handle('get-memory-info', async () => {
   };
 });
 
-// App lifecycle
-app.whenReady().then(async () => {
-  // Initialize ad blocker using EasyList (like Adblock Plus)
-  console.log('Initializing ad blocker for Wordle...');
-  try {
-    const blocker = await ElectronBlocker.fromPrebuiltAdsAndTracking(fetch, {
-      path: path.join(app.getPath('userData'), 'adblocker-cache.bin'),
-      read: async (...args) => fs.promises.readFile(...args),
-      write: async (...args) => fs.promises.writeFile(...args),
-    });
+// Built-in ad blocker for Wordle
+function setupWordleAdBlocker() {
+  const wordleSession = session.fromPartition('persist:wordle');
 
-    // Enable blocking for wordle partition only
-    const wordleSession = session.fromPartition('persist:wordle');
-    blocker.enableBlockingInSession(wordleSession);
-    console.log('Ad blocker enabled for Wordle session (using EasyList filters)');
-  } catch (error) {
-    console.error('Failed to initialize ad blocker:', error);
-  }
+  // Common ad domains to block
+  const adDomains = [
+    'doubleclick.net',
+    'googlesyndication.com',
+    'googleadservices.com',
+    'google-analytics.com',
+    'googletagmanager.com',
+    'googletagservices.com',
+    'adservice.google.com',
+    'pagead2.googlesyndication.com',
+    'tpc.googlesyndication.com',
+    'pubads.g.doubleclick.net',
+    'securepubads.g.doubleclick.net',
+    'static.doubleclick.net',
+    'nyt.com/ads',
+    'nytimes.com/ads'
+  ];
+
+  // Block network requests to ad domains
+  wordleSession.webRequest.onBeforeRequest((details, callback) => {
+    const url = details.url.toLowerCase();
+    const shouldBlock = adDomains.some(domain => url.includes(domain));
+
+    if (shouldBlock) {
+      console.log('[Ad Blocker] Blocked:', url);
+      callback({ cancel: true });
+    } else {
+      callback({ cancel: false });
+    }
+  });
+
+  console.log('Built-in ad blocker enabled for Wordle');
+}
+
+// App lifecycle
+app.whenReady().then(() => {
+  // Setup ad blocker for Wordle
+  setupWordleAdBlocker();
 
   createWindow();
 });
