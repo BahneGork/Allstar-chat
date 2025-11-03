@@ -233,19 +233,49 @@ function hideWordleAdPlaceholders(webview) {
       document.head.appendChild(style);
       console.log('[Wordle] Ad placeholder styles injected');
 
-      // Remove advertisement buttons
+      // Remove advertisement buttons and containers
       function removeAdButtons() {
-        document.querySelectorAll('button').forEach(btn => {
-          if (btn.textContent.toLowerCase().includes('advertisement')) {
-            console.log('[Wordle] Removing advertisement button');
+        // Find and log all buttons for debugging
+        const allButtons = Array.from(document.querySelectorAll('button'));
+        console.log('[Wordle] Total buttons found:', allButtons.length);
+
+        allButtons.forEach(btn => {
+          const text = btn.textContent.toLowerCase().trim();
+          const ariaLabel = btn.getAttribute('aria-label')?.toLowerCase() || '';
+
+          if (text.includes('advertisement') || ariaLabel.includes('advertisement')) {
+            console.log('[Wordle] Found ad button:', {
+              text: btn.textContent,
+              ariaLabel: btn.getAttribute('aria-label'),
+              parent: btn.parentElement?.tagName,
+              parentClass: btn.parentElement?.className
+            });
+
+            // Remove the button and potentially its parent container
+            const parent = btn.parentElement;
             btn.remove();
+
+            // If parent is now empty, remove it too
+            if (parent && parent.children.length === 0 && parent.textContent.trim() === '') {
+              console.log('[Wordle] Removing empty parent container:', parent.tagName, parent.className);
+              parent.remove();
+            }
           }
         });
 
         // Remove containers with aria-label advertisement
         document.querySelectorAll('[aria-label*="dvertisement"]').forEach(el => {
-          console.log('[Wordle] Removing aria-label ad element');
+          console.log('[Wordle] Removing aria-label ad element:', el.tagName, el.className);
           el.remove();
+        });
+
+        // Look for and remove pz-moment and similar containers
+        document.querySelectorAll('.pz-moment, [class*="ad-"], [id*="ad-"]').forEach(el => {
+          // Don't remove if it contains the game
+          if (!el.querySelector('#wordle-app-game') && !el.id.includes('game')) {
+            console.log('[Wordle] Removing ad container:', el.tagName, el.className || el.id);
+            el.remove();
+          }
         });
       }
 
