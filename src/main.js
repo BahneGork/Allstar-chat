@@ -1,6 +1,8 @@
-const { app, BrowserWindow, ipcMain, nativeImage, Tray, Menu, Notification } = require('electron');
+const { app, BrowserWindow, ipcMain, nativeImage, Tray, Menu, Notification, session } = require('electron');
 const path = require('path');
 const fs = require('fs');
+const { ElectronBlocker } = require('@ghostery/adblocker-electron');
+const fetch = require('cross-fetch');
 
 // Set app name for Task Manager (multiple methods for Windows compatibility)
 app.setName('AllStar');
@@ -550,7 +552,26 @@ ipcMain.handle('get-memory-info', async () => {
 });
 
 // App lifecycle
-app.whenReady().then(createWindow);
+app.whenReady().then(async () => {
+  // Initialize ad blocker using EasyList (like Adblock Plus)
+  console.log('Initializing ad blocker for Wordle...');
+  try {
+    const blocker = await ElectronBlocker.fromPrebuiltAdsAndTracking(fetch, {
+      path: path.join(app.getPath('userData'), 'adblocker-cache.bin'),
+      read: async (...args) => fs.promises.readFile(...args),
+      write: async (...args) => fs.promises.writeFile(...args),
+    });
+
+    // Enable blocking for wordle partition only
+    const wordleSession = session.fromPartition('persist:wordle');
+    blocker.enableBlockingInSession(wordleSession);
+    console.log('Ad blocker enabled for Wordle session (using EasyList filters)');
+  } catch (error) {
+    console.error('Failed to initialize ad blocker:', error);
+  }
+
+  createWindow();
+});
 
 app.on('window-all-closed', () => {
   if (process.platform !== 'darwin') {
