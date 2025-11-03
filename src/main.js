@@ -76,6 +76,28 @@ function getDefaultConfig() {
 
 let config = loadConfig();
 
+// Migrate config: Add new services if they don't exist
+function migrateConfig(config) {
+  const defaultServices = getDefaultConfig().services;
+  const existingServiceIds = config.services.map(s => s.id);
+
+  // Add any new services from default config that don't exist
+  defaultServices.forEach(defaultService => {
+    if (!existingServiceIds.includes(defaultService.id)) {
+      console.log(`Migrating: Adding new service ${defaultService.name}`);
+      config.services.push(defaultService);
+    }
+  });
+
+  saveConfig(config);
+  return config;
+}
+
+// Run migration on existing config
+if (config.services) {
+  config = migrateConfig(config);
+}
+
 // Store helper object to mimic electron-store API
 const store = {
   get: (key) => {
