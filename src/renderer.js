@@ -183,6 +183,11 @@ function createWebview(serviceId) {
       }
     });
 
+    // Ad blocking for Wordle
+    if (serviceId === 'wordle') {
+      injectWordleAdBlocker(webview);
+    }
+
     // Start monitoring for title changes and DOM-based notifications
     startTitleMonitoring(webview, serviceId);
     startDOMMonitoring(webview, serviceId);
@@ -198,6 +203,112 @@ function createWebview(serviceId) {
 
   container.appendChild(webview);
   console.log('Webview appended to container');
+}
+
+// Ad blocker for Wordle
+function injectWordleAdBlocker(webview) {
+  console.log('[Wordle] Injecting ad blocker...');
+
+  const adBlockerCSS = `
+    /* Hide NYT ads and promotional content */
+    [data-testid*="ad"],
+    [class*="ad-"],
+    [id*="ad-"],
+    .ad,
+    .advertisement,
+    .pz-ad-box,
+    .pz-ad,
+    aside[aria-label*="advertisement"],
+    iframe[src*="doubleclick"],
+    iframe[src*="googlesyndication"],
+    .place-ad,
+    .ad-container,
+    #ad-container,
+    .nytimes-ads,
+    [class*="AdWrapper"],
+    [class*="AdSlot"],
+    [id*="AdSlot"],
+    div[data-ad-placeholder],
+    .css-1wbvk4p, /* NYT specific ad class */
+    .css-vurnku, /* NYT specific ad class */
+    #gateway-content, /* NYT paywall */
+    [data-testid="inline-message"],
+    [data-testid="expanded-dock"],
+    [data-testid="purr-ad"],
+    [class*="adWrapper"],
+    [class*="AdUnit"],
+    [id*="google_ads"],
+    .place-bottom,
+    .place-top {
+      display: none !important;
+      visibility: hidden !important;
+      opacity: 0 !important;
+      height: 0 !important;
+      width: 0 !important;
+      position: absolute !important;
+      left: -9999px !important;
+    }
+
+    /* Remove bottom ad space */
+    body {
+      padding-bottom: 0 !important;
+    }
+
+    /* Maximize game area */
+    #wordle-app-game {
+      max-height: 100vh !important;
+    }
+  `;
+
+  try {
+    webview.executeJavaScript(`
+      (function() {
+        console.log('[Wordle Ad Blocker] Injecting CSS...');
+
+        // Inject ad blocking CSS
+        const style = document.createElement('style');
+        style.textContent = \`${adBlockerCSS}\`;
+        document.head.appendChild(style);
+
+        // Remove ad elements that get added dynamically
+        const observer = new MutationObserver((mutations) => {
+          mutations.forEach((mutation) => {
+            mutation.addedNodes.forEach((node) => {
+              if (node.nodeType === 1) { // Element node
+                // Check if it's an ad by various attributes
+                const isAd =
+                  node.id?.includes('ad') ||
+                  node.className?.includes('ad') ||
+                  node.getAttribute('data-testid')?.includes('ad') ||
+                  node.tagName === 'IFRAME' && (
+                    node.src?.includes('doubleclick') ||
+                    node.src?.includes('googlesyndication')
+                  );
+
+                if (isAd) {
+                  console.log('[Wordle Ad Blocker] Removing ad element:', node);
+                  node.remove();
+                }
+              }
+            });
+          });
+        });
+
+        observer.observe(document.body, {
+          childList: true,
+          subtree: true
+        });
+
+        console.log('[Wordle Ad Blocker] Active and monitoring for new ads');
+      })();
+    `).then(() => {
+      console.log('[Wordle] Ad blocker injected successfully');
+    }).catch(e => {
+      console.error('[Wordle] Failed to inject ad blocker:', e);
+    });
+  } catch (e) {
+    console.error('[Wordle] Ad blocker injection error:', e);
+  }
 }
 
 // Monitor page title for unread counts
