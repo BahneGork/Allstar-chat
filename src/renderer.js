@@ -248,7 +248,6 @@ function injectWordleAdBlocker(webview) {
     [class*="pz-ad"],
     [class*="ad-slot"],
     section[aria-label*="dvertisement"],
-    aside,
     /* Specific NYT Wordle ad containers */
     .pz-moment,
     .pz-moment__ad,
@@ -298,66 +297,69 @@ function injectWordleAdBlocker(webview) {
         style.textContent = \`${adBlockerCSS}\`;
         document.head.appendChild(style);
 
-        // Aggressive ad removal function
+        // Targeted ad removal function
         function removeAds() {
-          // Remove elements with "advertisement" in aria-label
+          // Remove elements with "advertisement" in aria-label (but only if they're small/likely ads)
           document.querySelectorAll('[aria-label*="dvertisement"]').forEach(el => {
-            console.log('[Wordle Ad Blocker] Removing aria-label ad:', el);
-            el.remove();
-          });
-
-          // Remove buttons/divs containing "advertisement" text
-          document.querySelectorAll('button, div, section, aside').forEach(el => {
-            if (el.textContent?.toLowerCase().includes('advertisement')) {
-              console.log('[Wordle Ad Blocker] Removing text-based ad:', el);
+            // Only remove if it's a button or small container, not main content
+            if (el.tagName === 'BUTTON' || el.tagName === 'ASIDE' ||
+                (el.offsetHeight < 300 && el.offsetWidth < 400)) {
+              console.log('[Wordle Ad Blocker] Removing aria-label ad:', el.tagName, el.className);
               el.remove();
             }
           });
 
-          // Remove pz-moment containers (NYT ad system)
+          // Remove buttons containing only "advertisement" text (not mixed content)
+          document.querySelectorAll('button').forEach(el => {
+            const text = el.textContent?.trim().toLowerCase();
+            if (text === 'advertisement' || text === 'ad') {
+              console.log('[Wordle Ad Blocker] Removing advertisement button');
+              el.remove();
+            }
+          });
+
+          // Remove pz-moment containers (NYT ad system) - but check they're not game content
           document.querySelectorAll('.pz-moment, [data-testid="pz-moment"], #pz-moment').forEach(el => {
-            console.log('[Wordle Ad Blocker] Removing pz-moment:', el);
+            if (!el.querySelector('#wordle-app-game') && !el.id.includes('game')) {
+              console.log('[Wordle Ad Blocker] Removing pz-moment:', el.className);
+              el.remove();
+            }
+          });
+
+          // Remove specific ad containers by class
+          document.querySelectorAll('.ad-container, .ad-wrapper, [class*="AdSlot"]').forEach(el => {
+            console.log('[Wordle Ad Blocker] Removing ad container:', el.className);
             el.remove();
           });
         }
 
-        // Run immediately
-        removeAds();
-
-        // Run again after a short delay to catch late-loading ads
-        setTimeout(removeAds, 1000);
-        setTimeout(removeAds, 2000);
+        // Run after a delay to let the game load first
+        setTimeout(removeAds, 1500);
         setTimeout(removeAds, 3000);
 
-        // Remove ad elements that get added dynamically
+        // Remove ad elements that get added dynamically (more conservative)
         const observer = new MutationObserver((mutations) => {
           mutations.forEach((mutation) => {
             mutation.addedNodes.forEach((node) => {
               if (node.nodeType === 1) { // Element node
-                // Check if it's an ad by various attributes
+                // Only target specific ad patterns, not general content
                 const isAd =
-                  node.id?.includes('ad') ||
-                  node.className?.includes('ad') ||
-                  node.className?.includes('pz-moment') ||
-                  node.getAttribute('data-testid')?.includes('ad') ||
-                  node.getAttribute('aria-label')?.toLowerCase().includes('advertisement') ||
-                  node.textContent?.toLowerCase().includes('advertisement') ||
-                  node.tagName === 'IFRAME' && (
+                  (node.className && typeof node.className === 'string' && (
+                    node.className.includes('ad-container') ||
+                    node.className.includes('ad-wrapper') ||
+                    node.className.includes('AdSlot')
+                  )) ||
+                  (node.tagName === 'IFRAME' && (
                     node.src?.includes('doubleclick') ||
-                    node.src?.includes('googlesyndication')
-                  );
+                    node.src?.includes('googlesyndication') ||
+                    node.src?.includes('ads-')
+                  )) ||
+                  (node.tagName === 'BUTTON' &&
+                   node.textContent?.trim().toLowerCase() === 'advertisement');
 
                 if (isAd) {
-                  console.log('[Wordle Ad Blocker] Removing dynamically added ad:', node);
+                  console.log('[Wordle Ad Blocker] Removing dynamically added ad:', node.tagName, node.className);
                   node.remove();
-                }
-
-                // Also check child elements
-                if (node.querySelectorAll) {
-                  node.querySelectorAll('[aria-label*="dvertisement"], .pz-moment, [class*="ad-"]').forEach(child => {
-                    console.log('[Wordle Ad Blocker] Removing nested ad:', child);
-                    child.remove();
-                  });
                 }
               }
             });
