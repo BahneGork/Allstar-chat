@@ -22,6 +22,7 @@ A lightweight, memory-efficient all-in-one messenger app for Windows.
 
 - Facebook Messenger
 - Google Chat
+- Wordle (NYT Games) - disabled by default
 
 ## Memory Optimization Features
 

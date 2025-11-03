@@ -68,7 +68,8 @@ function getDefaultConfig() {
     },
     services: [
       { id: 'messenger', name: 'Facebook Messenger', url: 'https://www.messenger.com', enabled: true },
-      { id: 'googlechat', name: 'Google Chat', url: 'https://chat.google.com', enabled: true }
+      { id: 'googlechat', name: 'Google Chat', url: 'https://chat.google.com', enabled: true },
+      { id: 'wordle', name: 'Wordle', url: 'https://www.nytimes.com/games/wordle/index.html', enabled: false }
     ]
   };
 }
