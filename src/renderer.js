@@ -207,95 +207,138 @@ function createWebview(serviceId) {
 
 // Hide ad placeholders on Wordle
 function hideWordleAdPlaceholders(webview) {
+  console.log('[Wordle] Attempting to inject ad blocker...');
+
   webview.executeJavaScript(`
     (function() {
-      // CSS to hide ad containers and buttons
-      const style = document.createElement('style');
-      style.textContent = \`
-        /* Hide ad containers that are left empty after blocking */
-        [class*="ad-"],
-        [id*="ad-"],
-        [data-testid*="ad"],
-        .pz-ad,
-        .pz-moment,
-        #pz-moment,
-        button[aria-label*="dvertisement"],
-        button:has-text("Advertisement"),
-        /* Hide empty divs that were ad containers */
-        div[style*="min-height"]:empty,
-        aside:empty {
-          display: none !important;
-          height: 0 !important;
-          margin: 0 !important;
-          padding: 0 !important;
-        }
-      \`;
-      document.head.appendChild(style);
-      console.log('[Wordle] Ad placeholder styles injected');
+      try {
+        console.log('[Wordle Ad Blocker] Script starting...');
 
-      // Remove advertisement buttons and containers
-      function removeAdButtons() {
-        // Find and log all buttons for debugging
-        const allButtons = Array.from(document.querySelectorAll('button'));
-        console.log('[Wordle] Total buttons found:', allButtons.length);
+        // CSS to hide ad containers and buttons
+        const style = document.createElement('style');
+        style.textContent = \`
+          /* Hide ad containers that are left empty after blocking */
+          [class*="ad-"],
+          [id*="ad-"],
+          [data-testid*="ad"],
+          .pz-ad,
+          .pz-moment,
+          #pz-moment,
+          button[aria-label*="dvertisement"],
+          /* Hide empty divs that were ad containers */
+          div[style*="min-height"]:empty,
+          aside:empty {
+            display: none !important;
+            height: 0 !important;
+            margin: 0 !important;
+            padding: 0 !important;
+          }
+        \`;
+        document.head.appendChild(style);
+        console.log('[Wordle Ad Blocker] CSS injected successfully');
 
-        allButtons.forEach(btn => {
-          const text = btn.textContent.toLowerCase().trim();
-          const ariaLabel = btn.getAttribute('aria-label')?.toLowerCase() || '';
+        // Remove advertisement buttons and containers
+        function removeAdButtons() {
+          try {
+            console.log('[Wordle Ad Blocker] Running removeAdButtons...');
 
-          if (text.includes('advertisement') || ariaLabel.includes('advertisement')) {
-            console.log('[Wordle] Found ad button:', {
-              text: btn.textContent,
-              ariaLabel: btn.getAttribute('aria-label'),
-              parent: btn.parentElement?.tagName,
-              parentClass: btn.parentElement?.className
+            // Find and log all buttons for debugging
+            const allButtons = Array.from(document.querySelectorAll('button'));
+            console.log('[Wordle Ad Blocker] Total buttons found:', allButtons.length);
+
+            let foundAdButton = false;
+            allButtons.forEach(btn => {
+              try {
+                const text = btn.textContent.toLowerCase().trim();
+                const ariaLabel = btn.getAttribute('aria-label')?.toLowerCase() || '';
+
+                if (text.includes('advertisement') || ariaLabel.includes('advertisement')) {
+                  foundAdButton = true;
+                  console.log('[Wordle Ad Blocker] Found ad button:', {
+                    text: btn.textContent,
+                    ariaLabel: btn.getAttribute('aria-label'),
+                    parent: btn.parentElement?.tagName,
+                    parentClass: btn.parentElement?.className,
+                    parentId: btn.parentElement?.id
+                  });
+
+                  // Remove the button and potentially its parent container
+                  const parent = btn.parentElement;
+                  const grandparent = parent?.parentElement;
+
+                  btn.remove();
+                  console.log('[Wordle Ad Blocker] Button removed');
+
+                  // If parent is now empty, remove it too
+                  if (parent && parent.children.length === 0) {
+                    console.log('[Wordle Ad Blocker] Removing empty parent:', parent.tagName, parent.className);
+                    parent.remove();
+
+                    // Check grandparent too
+                    if (grandparent && grandparent.children.length === 0) {
+                      console.log('[Wordle Ad Blocker] Removing empty grandparent:', grandparent.tagName, grandparent.className);
+                      grandparent.remove();
+                    }
+                  }
+                }
+              } catch (btnError) {
+                console.error('[Wordle Ad Blocker] Error processing button:', btnError);
+              }
             });
 
-            // Remove the button and potentially its parent container
-            const parent = btn.parentElement;
-            btn.remove();
-
-            // If parent is now empty, remove it too
-            if (parent && parent.children.length === 0 && parent.textContent.trim() === '') {
-              console.log('[Wordle] Removing empty parent container:', parent.tagName, parent.className);
-              parent.remove();
+            if (!foundAdButton) {
+              console.log('[Wordle Ad Blocker] No advertisement buttons found');
             }
+
+            // Remove containers with aria-label advertisement
+            const ariaElements = document.querySelectorAll('[aria-label*="dvertisement"]');
+            console.log('[Wordle Ad Blocker] Found', ariaElements.length, 'aria-label ad elements');
+            ariaElements.forEach(el => {
+              console.log('[Wordle Ad Blocker] Removing aria-label ad element:', el.tagName, el.className);
+              el.remove();
+            });
+
+            // Look for and remove pz-moment and similar containers
+            const adContainers = document.querySelectorAll('.pz-moment, [class*="ad-"], [id*="ad-"]');
+            console.log('[Wordle Ad Blocker] Found', adContainers.length, 'potential ad containers');
+            adContainers.forEach(el => {
+              // Don't remove if it contains the game
+              if (!el.querySelector('#wordle-app-game') && !el.id.includes('game')) {
+                console.log('[Wordle Ad Blocker] Removing ad container:', el.tagName, el.className || el.id);
+                el.remove();
+              }
+            });
+          } catch (removeError) {
+            console.error('[Wordle Ad Blocker] Error in removeAdButtons:', removeError);
           }
-        });
+        }
 
-        // Remove containers with aria-label advertisement
-        document.querySelectorAll('[aria-label*="dvertisement"]').forEach(el => {
-          console.log('[Wordle] Removing aria-label ad element:', el.tagName, el.className);
-          el.remove();
-        });
-
-        // Look for and remove pz-moment and similar containers
-        document.querySelectorAll('.pz-moment, [class*="ad-"], [id*="ad-"]').forEach(el => {
-          // Don't remove if it contains the game
-          if (!el.querySelector('#wordle-app-game') && !el.id.includes('game')) {
-            console.log('[Wordle] Removing ad container:', el.tagName, el.className || el.id);
-            el.remove();
-          }
-        });
-      }
-
-      // Run immediately and after delays
-      removeAdButtons();
-      setTimeout(removeAdButtons, 1000);
-      setTimeout(removeAdButtons, 2000);
-      setTimeout(removeAdButtons, 3000);
-
-      // Watch for new ad elements
-      const observer = new MutationObserver(() => {
+        // Run immediately and after delays
         removeAdButtons();
-      });
+        setTimeout(removeAdButtons, 1500);
+        setTimeout(removeAdButtons, 3000);
+        setTimeout(removeAdButtons, 5000);
 
-      observer.observe(document.body, {
-        childList: true,
-        subtree: true
-      });
+        // Watch for new ad elements
+        const observer = new MutationObserver(() => {
+          removeAdButtons();
+        });
+
+        observer.observe(document.body, {
+          childList: true,
+          subtree: true
+        });
+
+        console.log('[Wordle Ad Blocker] Observer started');
+      } catch (mainError) {
+        console.error('[Wordle Ad Blocker] Main error:', mainError);
+      }
     })();
-  `).catch(e => console.error('[Wordle] Failed to inject ad hiding CSS:', e));
+  `).then(() => {
+    console.log('[Wordle] Ad blocker injection completed');
+  }).catch(e => {
+    console.error('[Wordle] Failed to inject ad hiding script:', e);
+  });
 }
 
 // Monitor page title for unread counts
