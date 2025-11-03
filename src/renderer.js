@@ -183,6 +183,11 @@ function createWebview(serviceId) {
       }
     });
 
+    // Hide ad placeholders for Wordle
+    if (serviceId === 'wordle') {
+      hideWordleAdPlaceholders(webview);
+    }
+
     // Start monitoring for title changes and DOM-based notifications
     startTitleMonitoring(webview, serviceId);
     startDOMMonitoring(webview, serviceId);
@@ -198,6 +203,69 @@ function createWebview(serviceId) {
 
   container.appendChild(webview);
   console.log('Webview appended to container');
+}
+
+// Hide ad placeholders on Wordle
+function hideWordleAdPlaceholders(webview) {
+  webview.executeJavaScript(`
+    (function() {
+      // CSS to hide ad containers and buttons
+      const style = document.createElement('style');
+      style.textContent = \`
+        /* Hide ad containers that are left empty after blocking */
+        [class*="ad-"],
+        [id*="ad-"],
+        [data-testid*="ad"],
+        .pz-ad,
+        .pz-moment,
+        #pz-moment,
+        button[aria-label*="dvertisement"],
+        button:has-text("Advertisement"),
+        /* Hide empty divs that were ad containers */
+        div[style*="min-height"]:empty,
+        aside:empty {
+          display: none !important;
+          height: 0 !important;
+          margin: 0 !important;
+          padding: 0 !important;
+        }
+      \`;
+      document.head.appendChild(style);
+      console.log('[Wordle] Ad placeholder styles injected');
+
+      // Remove advertisement buttons
+      function removeAdButtons() {
+        document.querySelectorAll('button').forEach(btn => {
+          if (btn.textContent.toLowerCase().includes('advertisement')) {
+            console.log('[Wordle] Removing advertisement button');
+            btn.remove();
+          }
+        });
+
+        // Remove containers with aria-label advertisement
+        document.querySelectorAll('[aria-label*="dvertisement"]').forEach(el => {
+          console.log('[Wordle] Removing aria-label ad element');
+          el.remove();
+        });
+      }
+
+      // Run immediately and after delays
+      removeAdButtons();
+      setTimeout(removeAdButtons, 1000);
+      setTimeout(removeAdButtons, 2000);
+      setTimeout(removeAdButtons, 3000);
+
+      // Watch for new ad elements
+      const observer = new MutationObserver(() => {
+        removeAdButtons();
+      });
+
+      observer.observe(document.body, {
+        childList: true,
+        subtree: true
+      });
+    })();
+  `).catch(e => console.error('[Wordle] Failed to inject ad hiding CSS:', e));
 }
 
 // Monitor page title for unread counts
