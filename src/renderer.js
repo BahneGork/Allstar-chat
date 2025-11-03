@@ -310,7 +310,16 @@ function hideWordleAdPlaceholders(webview) {
               // Don't remove if it contains the game
               if (!el.querySelector('#wordle-app-game') && !el.id.includes('game')) {
                 console.log('[Wordle Ad Blocker] Removing ad container:', el.tagName, el.className || el.id);
+
+                // Also remove parent if it becomes empty
+                const parent = el.parentElement;
                 el.remove();
+
+                // Check if parent is now empty or only has whitespace
+                if (parent && parent.children.length === 0 && parent.textContent.trim() === '') {
+                  console.log('[Wordle Ad Blocker] Removing empty parent of ad container:', parent.tagName, parent.className || parent.id);
+                  parent.remove();
+                }
               }
             });
           } catch (removeError) {
