@@ -157,10 +157,10 @@ function createWebview(serviceId) {
   webview.addEventListener('dom-ready', () => {
     console.log(`${service.name} DOM ready`);
 
-    // Enable DevTools for Wordle to debug ad blocking
-    if (serviceId === 'wordle') {
-      webview.openDevTools();
-    }
+    // Enable DevTools for Wordle to debug ad blocking (commented out for normal use)
+    // if (serviceId === 'wordle') {
+    //   webview.openDevTools();
+    // }
 
     // Only start monitoring once per webview
     if (monitoringStarted[serviceId]) {
@@ -311,14 +311,22 @@ function hideWordleAdPlaceholders(webview) {
               if (!el.querySelector('#wordle-app-game') && !el.id.includes('game')) {
                 console.log('[Wordle Ad Blocker] Removing ad container:', el.tagName, el.className || el.id);
 
-                // Also remove parent if it becomes empty
+                // Also remove parent container (usually has min-height that causes spacing)
                 const parent = el.parentElement;
+                const grandparent = parent?.parentElement;
+
                 el.remove();
 
-                // Check if parent is now empty or only has whitespace
-                if (parent && parent.children.length === 0 && parent.textContent.trim() === '') {
-                  console.log('[Wordle Ad Blocker] Removing empty parent of ad container:', parent.tagName, parent.className || parent.id);
+                // Remove parent if it only has minimal content or becomes empty
+                if (parent && (parent.children.length === 0 || parent.children.length === 1)) {
+                  console.log('[Wordle Ad Blocker] Removing parent of ad container:', parent.tagName, parent.className || parent.id, 'children:', parent.children.length);
                   parent.remove();
+
+                  // Also check grandparent
+                  if (grandparent && grandparent.children.length === 0) {
+                    console.log('[Wordle Ad Blocker] Removing grandparent too:', grandparent.tagName, grandparent.className || grandparent.id);
+                    grandparent.remove();
+                  }
                 }
               }
             });
