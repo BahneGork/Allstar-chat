@@ -593,9 +593,14 @@ function setupAdBlocker() {
   // Enable ad blocking for default session (used by child windows/popups)
   setupAdBlockerForSession(session.defaultSession, 'default session');
 
-  // Enable ad blocking for Wordle partition
-  const wordleSession = session.fromPartition('persist:wordle');
-  setupAdBlockerForSession(wordleSession, 'Wordle');
+  // Enable ad blocking for all service partitions
+  const services = config.services || [];
+  services.forEach(service => {
+    const serviceSession = session.fromPartition(`persist:${service.id}`);
+    setupAdBlockerForSession(serviceSession, service.name);
+  });
+
+  console.log(`Ad blocker enabled for ${services.length + 1} sessions (default + all services)`);
 }
 
 // App lifecycle
