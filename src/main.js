@@ -550,50 +550,58 @@ ipcMain.handle('get-memory-info', async () => {
 });
 
 // Built-in ad blocker for Wordle
-function setupWordleAdBlocker() {
-  const wordleSession = session.fromPartition('persist:wordle');
+// Common ad domains to block
+const adDomains = [
+  'doubleclick.net',
+  'googlesyndication.com',
+  'googleadservices.com',
+  'google-analytics.com',
+  'googletagmanager.com',
+  'googletagservices.com',
+  'adservice.google.com',
+  'pagead2.googlesyndication.com',
+  'tpc.googlesyndication.com',
+  'pubads.g.doubleclick.net',
+  'securepubads.g.doubleclick.net',
+  'static.doubleclick.net',
+  'nyt.com/ads',
+  'nytimes.com/ads',
+  'sentry.io',
+  'chartbeat.com',
+  'brandmetrics.com'
+];
 
-  // Common ad domains to block
-  const adDomains = [
-    'doubleclick.net',
-    'googlesyndication.com',
-    'googleadservices.com',
-    'google-analytics.com',
-    'googletagmanager.com',
-    'googletagservices.com',
-    'adservice.google.com',
-    'pagead2.googlesyndication.com',
-    'tpc.googlesyndication.com',
-    'pubads.g.doubleclick.net',
-    'securepubads.g.doubleclick.net',
-    'static.doubleclick.net',
-    'nyt.com/ads',
-    'nytimes.com/ads',
-    'sentry.io',
-    'chartbeat.com',
-    'brandmetrics.com'
-  ];
-
-  // Block network requests to ad domains
-  wordleSession.webRequest.onBeforeRequest((details, callback) => {
+// Setup ad blocker for a specific session
+function setupAdBlockerForSession(sessionToBlock, sessionName = 'session') {
+  sessionToBlock.webRequest.onBeforeRequest((details, callback) => {
     const url = details.url.toLowerCase();
     const shouldBlock = adDomains.some(domain => url.includes(domain));
 
     if (shouldBlock) {
-      console.log('[Ad Blocker] Blocked:', url);
+      console.log(`[Ad Blocker - ${sessionName}] Blocked:`, url);
       callback({ cancel: true });
     } else {
       callback({ cancel: false });
     }
   });
 
-  console.log('Built-in ad blocker enabled for Wordle');
+  console.log(`Built-in ad blocker enabled for ${sessionName}`);
+}
+
+// Setup ad blocker for all sessions
+function setupAdBlocker() {
+  // Enable ad blocking for default session (used by child windows/popups)
+  setupAdBlockerForSession(session.defaultSession, 'default session');
+
+  // Enable ad blocking for Wordle partition
+  const wordleSession = session.fromPartition('persist:wordle');
+  setupAdBlockerForSession(wordleSession, 'Wordle');
 }
 
 // App lifecycle
 app.whenReady().then(() => {
-  // Setup ad blocker for Wordle
-  setupWordleAdBlocker();
+  // Setup ad blocker for all sessions
+  setupAdBlocker();
 
   createWindow();
 });
