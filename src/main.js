@@ -126,21 +126,29 @@ let tray = null;
 function createTray(settings) {
   if (!settings.systemTray || tray) return;
 
+  // Determine base path - works in both dev and production
+  const basePath = app.isPackaged
+    ? path.join(process.resourcesPath, 'app.asar.unpacked', 'assets')
+    : path.join(__dirname, '../assets');
+
   // Try .ico first (preferred for Windows), then .png
   const iconPaths = [
-    path.join(__dirname, '../assets/icon.ico'),
-    path.join(__dirname, '../assets/icon.png')
+    path.join(basePath, 'icon.ico'),
+    path.join(basePath, 'icon.png')
   ];
 
   let iconPath = null;
   for (const testPath of iconPaths) {
     try {
+      console.log('Trying icon path:', testPath);
       const stats = fs.statSync(testPath);
       if (stats.size > 0) {
         iconPath = testPath;
+        console.log('Found valid icon:', testPath);
         break;
       }
     } catch (e) {
+      console.log('Icon not found at:', testPath);
       // File doesn't exist, try next
     }
   }
@@ -152,6 +160,7 @@ function createTray(settings) {
 
   try {
     tray = new Tray(iconPath);
+    console.log('Tray created successfully');
   } catch (e) {
     console.error('Failed to create tray icon:', e);
     return;
