@@ -95,9 +95,18 @@ function switchTab(serviceId) {
   // Note: Badge will reappear if title updates with new unread count
   // This gives immediate visual feedback that you've opened the tab
 
-  // Update webview visibility
+  // Update webview visibility and notification permissions
   document.querySelectorAll('webview').forEach(webview => {
-    webview.classList.toggle('active', webview.dataset.serviceId === serviceId);
+    const isActive = webview.dataset.serviceId === serviceId;
+    webview.classList.toggle('active', isActive);
+
+    // Block notifications for active tab (user is viewing it)
+    // Allow notifications for inactive tabs
+    if (isActive) {
+      blockWebviewNotifications(webview);
+    } else {
+      allowWebviewNotifications(webview);
+    }
   });
 
   // Create webview if it doesn't exist (lazy loading when preload is disabled)
@@ -110,6 +119,64 @@ function switchTab(serviceId) {
     resumeTab(serviceId);
   }
 
+}
+
+// Block notifications from webview (for active tab)
+function blockWebviewNotifications(webview) {
+  try {
+    webview.executeJavaScript(`
+      (function() {
+        // Save original Notification if not already saved
+        if (!window.__originalNotification) {
+          window.__originalNotification = window.Notification;
+        }
+
+        // Override Notification API to be silent
+        window.Notification = function() {
+          console.log('[AllStar] Notification blocked (active tab)');
+          // Return a dummy notification that does nothing
+          return {
+            close: () => {},
+            addEventListener: () => {},
+            removeEventListener: () => {}
+          };
+        };
+        window.Notification.permission = 'granted'; // Pretend permission is granted
+        window.Notification.requestPermission = () => Promise.resolve('granted');
+
+        console.log('[AllStar] Notifications muted for active tab');
+      })();
+    `).catch(e => {
+      // Silently ignore - frame might be disposed or not ready
+      if (!e.message.includes('disposed')) {
+        console.log('[AllStar] Could not block notifications:', e.message);
+      }
+    });
+  } catch (e) {
+    console.log('[AllStar] Error blocking notifications:', e.message);
+  }
+}
+
+// Allow notifications from webview (for inactive tabs)
+function allowWebviewNotifications(webview) {
+  try {
+    webview.executeJavaScript(`
+      (function() {
+        // Restore original Notification API
+        if (window.__originalNotification) {
+          window.Notification = window.__originalNotification;
+          console.log('[AllStar] Notifications enabled for inactive tab');
+        }
+      })();
+    `).catch(e => {
+      // Silently ignore - frame might be disposed or not ready
+      if (!e.message.includes('disposed')) {
+        console.log('[AllStar] Could not allow notifications:', e.message);
+      }
+    });
+  } catch (e) {
+    console.log('[AllStar] Error allowing notifications:', e.message);
+  }
 }
 
 // Create webview
@@ -191,6 +258,11 @@ function createWebview(serviceId) {
     // Hide ad placeholders for Wordle
     if (serviceId === 'wordle') {
       hideWordleAdPlaceholders(webview);
+    }
+
+    // Block notifications if this is the active tab
+    if (serviceId === activeTabId) {
+      blockWebviewNotifications(webview);
     }
 
     // Start monitoring for title changes and DOM-based notifications
