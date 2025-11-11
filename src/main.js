@@ -1,4 +1,4 @@
-const { app, BrowserWindow, ipcMain, nativeImage, Tray, Menu, Notification, session } = require('electron');
+const { app, BrowserWindow, ipcMain, nativeImage, Tray, Menu, Notification, session, powerMonitor } = require('electron');
 const path = require('path');
 const fs = require('fs');
 
@@ -618,6 +618,30 @@ app.whenReady().then(() => {
   setupAdBlocker();
 
   createWindow();
+
+  // Handle Windows sleep/wake to fix title bar disappearing
+  powerMonitor.on('suspend', () => {
+    console.log('[PowerMonitor] System going to sleep');
+  });
+
+  powerMonitor.on('resume', () => {
+    console.log('[PowerMonitor] System resumed from sleep');
+
+    // Fix title bar disappearing after wake by forcing window refresh
+    if (mainWindow && !mainWindow.isDestroyed()) {
+      // Method 1: Force window to redraw by toggling a harmless property
+      const wasOnTop = mainWindow.isAlwaysOnTop();
+      mainWindow.setAlwaysOnTop(!wasOnTop);
+      mainWindow.setAlwaysOnTop(wasOnTop);
+
+      // Method 2: Invalidate webContents to force repaint
+      if (mainWindow.webContents && !mainWindow.webContents.isDestroyed()) {
+        mainWindow.webContents.invalidate();
+      }
+
+      console.log('[PowerMonitor] Window refreshed after wake');
+    }
+  });
 });
 
 app.on('window-all-closed', () => {
