@@ -519,9 +519,15 @@ ipcMain.handle('get-memory-info', async () => {
       const ourPIDs = allProcessMetrics.map(p => p.pid);
       console.log(`[Memory] Our process PIDs: ${ourPIDs.join(', ')}`);
 
+      // Validate PIDs are integers (security - prevent command injection)
+      const validPIDs = ourPIDs.filter(pid => Number.isInteger(pid) && pid > 0);
+      if (validPIDs.length === 0) {
+        throw new Error('No valid PIDs found');
+      }
+
       // Query Windows for WorkingSetPrivate - this is what Task Manager shows!
       // Use Win32_PerfRawData_PerfProc_Process for WorkingSetPrivate property
-      const pidList = ourPIDs.join(' OR IDProcess=');
+      const pidList = validPIDs.join(' OR IDProcess=');
       const output = execSync(`wmic path Win32_PerfRawData_PerfProc_Process where "IDProcess=${pidList}" get IDProcess,WorkingSetPrivate /format:csv`, {
         encoding: 'utf8',
         timeout: 15000,  // Increased to 15 seconds - perf counters are slower
