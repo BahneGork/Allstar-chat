@@ -19,5 +19,8 @@ contextBridge.exposeInMainWorld('electron', {
 
   // Window controls
   toggleAlwaysOnTop: () => ipcRenderer.invoke('toggle-always-on-top'),
-  getAlwaysOnTop: () => ipcRenderer.invoke('get-always-on-top')
+  getAlwaysOnTop: () => ipcRenderer.invoke('get-always-on-top'),
+
+  // Session management
+  clearServiceSession: (serviceId) => ipcRenderer.invoke('clear-service-session', serviceId)
 });

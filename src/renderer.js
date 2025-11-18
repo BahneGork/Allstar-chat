@@ -3,6 +3,8 @@ let currentServices = [];
 let activeTabId = null;
 let tabSuspensionTimers = {};
 let monitoringStarted = {}; // Track which webviews have monitoring started
+let titleMonitoringIntervals = {}; // Track title monitoring intervals
+let domMonitoringIntervals = {}; // Track DOM monitoring intervals
 
 // Initialize app
 async function init() {
@@ -100,12 +102,26 @@ function switchTab(serviceId) {
     const isActive = webview.dataset.serviceId === serviceId;
     webview.classList.toggle('active', isActive);
 
-    // Block notifications for active tab (user is viewing it)
-    // Allow notifications for inactive tabs
+    // Block notifications and mute audio for active tab (user is viewing it)
+    // Allow notifications and unmute audio for inactive tabs
     if (isActive) {
       blockWebviewNotifications(webview);
+      // Mute in-page sounds for active tab (you can see the messages already)
+      try {
+        webview.setAudioMuted(true);
+        console.log(`[${webview.dataset.serviceId}] Audio muted (active tab)`);
+      } catch (e) {
+        console.warn('Could not mute webview:', e.message);
+      }
     } else {
       allowWebviewNotifications(webview);
+      // Unmute for inactive tabs (so you hear notifications from background chats)
+      try {
+        webview.setAudioMuted(false);
+        console.log(`[${webview.dataset.serviceId}] Audio unmuted (inactive tab)`);
+      } catch (e) {
+        console.warn('Could not unmute webview:', e.message);
+      }
     }
   });
 
@@ -219,6 +235,85 @@ function createWebview(serviceId) {
       return; // These are expected during normal operation
     }
     console.error(`${service.name} failed to load:`, e.errorCode, e.errorDescription);
+
+    // Show error message with retry option for main frame load failures
+    const errorOverlay = document.createElement('div');
+    errorOverlay.id = `load-error-${serviceId}`;
+    errorOverlay.style.cssText = `
+      position: absolute;
+      top: 50%;
+      left: 50%;
+      transform: translate(-50%, -50%);
+      background: #2d2d2d;
+      color: #fff;
+      padding: 30px;
+      border-radius: 8px;
+      text-align: center;
+      z-index: 9999;
+      box-shadow: 0 4px 12px rgba(0,0,0,0.5);
+      max-width: 400px;
+    `;
+    errorOverlay.innerHTML = `
+      <h3 style="margin: 0 0 15px 0; color: #ff6b6b;">⚠️ Failed to Load ${service.name}</h3>
+      <p style="margin: 0 0 10px 0; color: #ccc; font-size: 14px;">Error: ${e.errorDescription}</p>
+      <p style="margin: 0 0 20px 0; color: #888; font-size: 12px;">Code: ${e.errorCode}</p>
+      <button id="retry-load-${serviceId}" style="
+        background: #007acc;
+        color: white;
+        border: none;
+        padding: 10px 20px;
+        border-radius: 4px;
+        cursor: pointer;
+        font-size: 14px;
+        margin-right: 10px;
+      ">Retry</button>
+      <button id="clear-session-${serviceId}" style="
+        background: #d9534f;
+        color: white;
+        border: none;
+        padding: 10px 20px;
+        border-radius: 4px;
+        cursor: pointer;
+        font-size: 14px;
+      ">Clear Session & Retry</button>
+    `;
+
+    container.appendChild(errorOverlay);
+
+    // Retry button - simple reload
+    document.getElementById(`retry-load-${serviceId}`).addEventListener('click', () => {
+      errorOverlay.remove();
+      webview.reload();
+    });
+
+    // Clear session button - clear all session data and reload
+    document.getElementById(`clear-session-${serviceId}`).addEventListener('click', async () => {
+      errorOverlay.remove();
+      console.log(`[${serviceId}] Clearing session and reloading...`);
+
+      try {
+        // Clear session data via main process
+        const result = await window.electron.clearServiceSession(serviceId);
+
+        if (result.success) {
+          console.log(`[${serviceId}] Session cleared successfully`);
+        } else {
+          console.warn(`[${serviceId}] Session clear returned error:`, result.error);
+        }
+
+        // Clear webview history
+        webview.clearHistory();
+
+        // Navigate to blank first, then back to service URL
+        await webview.loadURL('about:blank');
+        setTimeout(() => {
+          webview.src = service.url;
+        }, 500);
+      } catch (err) {
+        console.error(`[${serviceId}] Failed to clear session:`, err);
+        webview.reload();
+      }
+    });
   });
 
   webview.addEventListener('dom-ready', () => {
@@ -276,6 +371,109 @@ function createWebview(serviceId) {
 
   webview.addEventListener('new-window', (e) => {
     require('electron').shell.openExternal(e.url);
+  });
+
+  // Handle webview crashes
+  webview.addEventListener('render-process-gone', (e) => {
+    console.error(`[${serviceId}] Webview crashed:`, e.details);
+
+    // Show error overlay
+    const errorDiv = document.createElement('div');
+    errorDiv.style.cssText = `
+      position: absolute;
+      top: 50%;
+      left: 50%;
+      transform: translate(-50%, -50%);
+      background: #2d2d2d;
+      color: #fff;
+      padding: 30px;
+      border-radius: 8px;
+      text-align: center;
+      z-index: 9999;
+      box-shadow: 0 4px 12px rgba(0,0,0,0.5);
+    `;
+    errorDiv.innerHTML = `
+      <h3 style="margin: 0 0 15px 0; color: #ff6b6b;">⚠️ ${service.name} Crashed</h3>
+      <p style="margin: 0 0 20px 0; color: #ccc;">The page stopped responding</p>
+      <button id="reload-${serviceId}" style="
+        background: #007acc;
+        color: white;
+        border: none;
+        padding: 10px 20px;
+        border-radius: 4px;
+        cursor: pointer;
+        font-size: 14px;
+      ">Reload</button>
+    `;
+
+    container.appendChild(errorDiv);
+
+    document.getElementById(`reload-${serviceId}`).addEventListener('click', () => {
+      errorDiv.remove();
+      webview.reload();
+    });
+
+    // Auto-reload after 3 seconds
+    setTimeout(() => {
+      if (errorDiv.parentNode) {
+        console.log(`[${serviceId}] Auto-reloading after crash...`);
+        errorDiv.remove();
+        webview.reload();
+      }
+    }, 3000);
+  });
+
+  // Handle webview becoming unresponsive
+  webview.addEventListener('unresponsive', () => {
+    console.warn(`[${serviceId}] Webview became unresponsive`);
+
+    // Show warning overlay
+    const warningDiv = document.createElement('div');
+    warningDiv.id = `unresponsive-${serviceId}`;
+    warningDiv.style.cssText = `
+      position: absolute;
+      top: 50%;
+      left: 50%;
+      transform: translate(-50%, -50%);
+      background: #2d2d2d;
+      color: #fff;
+      padding: 30px;
+      border-radius: 8px;
+      text-align: center;
+      z-index: 9999;
+      box-shadow: 0 4px 12px rgba(0,0,0,0.5);
+    `;
+    warningDiv.innerHTML = `
+      <h3 style="margin: 0 0 15px 0; color: #ffa500;">⚠️ ${service.name} Not Responding</h3>
+      <p style="margin: 0 0 20px 0; color: #ccc;">Waiting for page to respond...</p>
+      <button id="reload-unresponsive-${serviceId}" style="
+        background: #007acc;
+        color: white;
+        border: none;
+        padding: 10px 20px;
+        border-radius: 4px;
+        cursor: pointer;
+        font-size: 14px;
+      ">Reload Now</button>
+    `;
+
+    container.appendChild(warningDiv);
+
+    document.getElementById(`reload-unresponsive-${serviceId}`).addEventListener('click', () => {
+      warningDiv.remove();
+      webview.reload();
+    });
+  });
+
+  // Handle webview becoming responsive again
+  webview.addEventListener('responsive', () => {
+    console.log(`[${serviceId}] Webview became responsive again`);
+
+    // Remove warning overlay if present
+    const warningDiv = document.getElementById(`unresponsive-${serviceId}`);
+    if (warningDiv) {
+      warningDiv.remove();
+    }
   });
 
   container.appendChild(webview);
@@ -437,16 +635,35 @@ function hideWordleAdPlaceholders(webview) {
 
 // Monitor page title for unread counts
 function startTitleMonitoring(webview, serviceId) {
-  setInterval(() => {
+  // Clear existing interval if any
+  if (titleMonitoringIntervals[serviceId]) {
+    clearInterval(titleMonitoringIntervals[serviceId]);
+  }
+
+  titleMonitoringIntervals[serviceId] = setInterval(() => {
     try {
+      // Check if webview still exists and is not destroyed
+      if (!webview || !webview.isConnected) {
+        console.log(`[${serviceId}] Webview disconnected, stopping title monitoring`);
+        clearInterval(titleMonitoringIntervals[serviceId]);
+        delete titleMonitoringIntervals[serviceId];
+        return;
+      }
+
       const title = webview.getTitle();
       if (title) {
         console.log(`[${serviceId}] Title:`, title);
         updateBadgeFromTitle(serviceId, title);
       }
     } catch (e) {
-      // Webview might not be ready
-      console.error(`Error getting title for ${serviceId}:`, e);
+      // Webview might not be ready or destroyed
+      if (e.message && e.message.includes('destroyed')) {
+        console.log(`[${serviceId}] Webview destroyed, stopping title monitoring`);
+        clearInterval(titleMonitoringIntervals[serviceId]);
+        delete titleMonitoringIntervals[serviceId];
+      } else {
+        console.error(`Error getting title for ${serviceId}:`, e);
+      }
     }
   }, 3000); // Check every 3 seconds
 }
@@ -454,9 +671,22 @@ function startTitleMonitoring(webview, serviceId) {
 // Monitor DOM for notification elements
 function startDOMMonitoring(webview, serviceId) {
   console.log(`[${serviceId}] Starting DOM monitoring interval...`);
-  setInterval(() => {
+
+  // Clear existing interval if any
+  if (domMonitoringIntervals[serviceId]) {
+    clearInterval(domMonitoringIntervals[serviceId]);
+  }
+
+  domMonitoringIntervals[serviceId] = setInterval(() => {
     console.log(`[${serviceId}] Running DOM check...`);
     try {
+      // Check if webview still exists and is not destroyed
+      if (!webview || !webview.isConnected) {
+        console.log(`[${serviceId}] Webview disconnected, stopping DOM monitoring`);
+        clearInterval(domMonitoringIntervals[serviceId]);
+        delete domMonitoringIntervals[serviceId];
+        return;
+      }
       // Inject code to check for notification badges in the page
       webview.executeJavaScript(`
         (function() {

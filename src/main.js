@@ -314,13 +314,15 @@ function createWindow() {
       // Force quit mode when closing
       app.isQuitting = true;
       saveBounds();
-      // Clean up webviews before closing
+
+      // Gracefully stop webviews but don't remove them
+      // Let the before-quit handler do the cleanup
       if (mainWindow && mainWindow.webContents) {
         mainWindow.webContents.executeJavaScript(`
           document.querySelectorAll('webview').forEach(wv => {
             try {
+              // Just stop loading, don't destroy yet
               wv.stop();
-              wv.remove();
             } catch(e) {}
           });
         `).catch(() => {});
@@ -362,10 +364,18 @@ ipcMain.handle('update-settings', (_, newSettings) => {
 
   // Update auto-launch based on startOnBoot setting
   if (updatedSettings.startOnBoot !== currentSettings.startOnBoot) {
-    app.setLoginItemSettings({
-      openAtLogin: updatedSettings.startOnBoot,
-      path: process.execPath
-    });
+    // Only allow startup registration when app is packaged
+    if (app.isPackaged) {
+      app.setLoginItemSettings({
+        openAtLogin: updatedSettings.startOnBoot,
+        path: process.execPath
+      });
+    } else {
+      console.warn('[Startup] Cannot register startup in development mode - app must be packaged');
+      // Revert the setting since we can't apply it
+      updatedSettings.startOnBoot = false;
+      store.set('settings', updatedSettings);
+    }
   }
 
   return updatedSettings;
@@ -398,6 +408,24 @@ ipcMain.handle('toggle-always-on-top', () => {
 ipcMain.handle('get-always-on-top', () => {
   if (!mainWindow) return false;
   return mainWindow.isAlwaysOnTop();
+});
+
+ipcMain.handle('clear-service-session', async (_, serviceId) => {
+  console.log(`[Session] Clearing session for service: ${serviceId}`);
+  try {
+    const serviceSession = session.fromPartition(`persist:${serviceId}`);
+    if (serviceSession) {
+      await serviceSession.clearCache();
+      await serviceSession.clearStorageData({
+        storages: ['cookies', 'localstorage', 'sessionstorage', 'indexdb', 'websql', 'serviceworkers', 'cachestorage']
+      });
+      console.log(`[Session] Successfully cleared session for ${serviceId}`);
+      return { success: true };
+    }
+  } catch (error) {
+    console.error(`[Session] Failed to clear session for ${serviceId}:`, error);
+    return { success: false, error: error.message };
+  }
 });
 
 ipcMain.handle('show-notification', (_, title, body, serviceId) => {
@@ -614,6 +642,25 @@ function setupAdBlocker() {
 
 // App lifecycle
 app.whenReady().then(() => {
+  // Prevent multiple instances from running
+  const gotTheLock = app.requestSingleInstanceLock();
+
+  if (!gotTheLock) {
+    console.log('[SingleInstance] Another instance is already running. Quitting this instance.');
+    app.quit();
+    return;
+  }
+
+  // Handle second instance attempts - focus the existing window
+  app.on('second-instance', (event, commandLine, workingDirectory) => {
+    console.log('[SingleInstance] Second instance blocked. Focusing existing window.');
+    if (mainWindow) {
+      if (mainWindow.isMinimized()) mainWindow.restore();
+      if (!mainWindow.isVisible()) mainWindow.show();
+      mainWindow.focus();
+    }
+  });
+
   // Setup ad blocker for all sessions
   setupAdBlocker();
 
@@ -627,19 +674,67 @@ app.whenReady().then(() => {
   powerMonitor.on('resume', () => {
     console.log('[PowerMonitor] System resumed from sleep');
 
-    // Fix title bar disappearing after wake by forcing window refresh
+    // Fix window frame/chrome issues after wake (title bar, move, resize)
     if (mainWindow && !mainWindow.isDestroyed()) {
-      // Method 1: Force window to redraw by toggling a harmless property
+      console.log('[PowerMonitor] Restoring window functionality...');
+
+      // Save current window state
+      const wasVisible = mainWindow.isVisible();
+      const wasMinimized = mainWindow.isMinimized();
       const wasOnTop = mainWindow.isAlwaysOnTop();
-      mainWindow.setAlwaysOnTop(!wasOnTop);
-      mainWindow.setAlwaysOnTop(wasOnTop);
+      const currentBounds = mainWindow.getBounds();
 
-      // Method 2: Invalidate webContents to force repaint
-      if (mainWindow.webContents && !mainWindow.webContents.isDestroyed()) {
-        mainWindow.webContents.invalidate();
-      }
+      // Method 1: Toggle movable/resizable to force frame refresh
+      mainWindow.setMovable(false);
+      mainWindow.setResizable(false);
+      setTimeout(() => {
+        if (mainWindow && !mainWindow.isDestroyed()) {
+          mainWindow.setMovable(true);
+          mainWindow.setResizable(true);
+          console.log('[PowerMonitor] Step 1: Toggled movable/resizable');
+        }
+      }, 50);
 
-      console.log('[PowerMonitor] Window refreshed after wake');
+      // Method 2: Force bounds update to refresh window frame
+      setTimeout(() => {
+        if (mainWindow && !mainWindow.isDestroyed()) {
+          // Set bounds to current bounds (forces window manager to refresh)
+          mainWindow.setBounds(currentBounds);
+          console.log('[PowerMonitor] Step 2: Forced bounds refresh');
+        }
+      }, 100);
+
+      // Method 3: Hide and show to fully refresh window chrome
+      setTimeout(() => {
+        if (mainWindow && !mainWindow.isDestroyed()) {
+          if (wasVisible && !wasMinimized) {
+            mainWindow.hide();
+            setTimeout(() => {
+              if (mainWindow && !mainWindow.isDestroyed()) {
+                mainWindow.show();
+                mainWindow.focus();
+                console.log('[PowerMonitor] Step 3: Hide/show cycle completed');
+              }
+            }, 50);
+          }
+        }
+      }, 150);
+
+      // Method 4: Toggle alwaysOnTop and invalidate webContents
+      setTimeout(() => {
+        if (mainWindow && !mainWindow.isDestroyed()) {
+          mainWindow.setAlwaysOnTop(!wasOnTop);
+          mainWindow.setAlwaysOnTop(wasOnTop);
+
+          if (mainWindow.webContents && !mainWindow.webContents.isDestroyed()) {
+            mainWindow.webContents.invalidate();
+          }
+
+          console.log('[PowerMonitor] Step 4: AlwaysOnTop toggle and webContents invalidation');
+        }
+      }, 250);
+
+      console.log('[PowerMonitor] Window restoration sequence initiated');
     }
   });
 });
@@ -742,6 +837,10 @@ app.on('will-quit', () => {
     ipcMain.removeHandler('get-services');
     ipcMain.removeHandler('update-services');
     ipcMain.removeHandler('get-memory-info');
+    ipcMain.removeHandler('clear-service-session');
+    ipcMain.removeHandler('show-notification');
+    ipcMain.removeHandler('toggle-always-on-top');
+    ipcMain.removeHandler('get-always-on-top');
   } catch (e) {}
 
   // Force close main window
@@ -752,23 +851,13 @@ app.on('will-quit', () => {
 
 // Force quit all processes on exit
 app.on('quit', () => {
-  mainWindow = null;
+  // Clean up tray first to prevent orphaned icons
   destroyTray();
 
-  // Immediately kill all child processes
-  try {
-    const { execSync } = require('child_process');
-    if (process.platform === 'win32') {
-      // On Windows, kill all AllStar processes
-      try {
-        // Kill by process name to catch all instances
-        execSync('taskkill /F /IM "AllStar.exe" /T', { stdio: 'ignore', timeout: 2000 });
-      } catch (e) {
-        // Processes already dead or couldn't kill, that's fine
-      }
-    }
-  } catch (e) {}
+  mainWindow = null;
 
-  // Force exit process immediately
-  process.exit(0);
+  // Don't force kill all AllStar processes - now that we have single instance lock,
+  // this would only kill the legitimate instance
+  // Just exit gracefully
+  console.log('[App] Exiting gracefully...');
 });
