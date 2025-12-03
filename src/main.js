@@ -673,76 +673,140 @@ app.whenReady().then(() => {
   createWindow();
 
   // Handle Windows sleep/wake to fix title bar disappearing
+  // Also handle lock-screen events which can cause similar issues
   powerMonitor.on('suspend', () => {
     console.log('[PowerMonitor] System going to sleep');
   });
 
+  powerMonitor.on('lock-screen', () => {
+    console.log('[PowerMonitor] Screen locked');
+  });
+
+  powerMonitor.on('unlock-screen', () => {
+    console.log('[PowerMonitor] Screen unlocked - triggering restoration');
+    restoreWindowChrome();
+  });
+
   powerMonitor.on('resume', () => {
     console.log('[PowerMonitor] System resumed from sleep');
-
-    // Fix window frame/chrome issues after wake (title bar, move, resize)
-    if (mainWindow && !mainWindow.isDestroyed()) {
-      console.log('[PowerMonitor] Restoring window functionality...');
-
-      // Save current window state
-      const wasVisible = mainWindow.isVisible();
-      const wasMinimized = mainWindow.isMinimized();
-      const wasOnTop = mainWindow.isAlwaysOnTop();
-      const currentBounds = mainWindow.getBounds();
-
-      // Method 1: Toggle movable/resizable to force frame refresh
-      mainWindow.setMovable(false);
-      mainWindow.setResizable(false);
-      setTimeout(() => {
-        if (mainWindow && !mainWindow.isDestroyed()) {
-          mainWindow.setMovable(true);
-          mainWindow.setResizable(true);
-          console.log('[PowerMonitor] Step 1: Toggled movable/resizable');
-        }
-      }, 50);
-
-      // Method 2: Force bounds update to refresh window frame
-      setTimeout(() => {
-        if (mainWindow && !mainWindow.isDestroyed()) {
-          // Set bounds to current bounds (forces window manager to refresh)
-          mainWindow.setBounds(currentBounds);
-          console.log('[PowerMonitor] Step 2: Forced bounds refresh');
-        }
-      }, 100);
-
-      // Method 3: Hide and show to fully refresh window chrome
-      setTimeout(() => {
-        if (mainWindow && !mainWindow.isDestroyed()) {
-          if (wasVisible && !wasMinimized) {
-            mainWindow.hide();
-            setTimeout(() => {
-              if (mainWindow && !mainWindow.isDestroyed()) {
-                mainWindow.show();
-                mainWindow.focus();
-                console.log('[PowerMonitor] Step 3: Hide/show cycle completed');
-              }
-            }, 50);
-          }
-        }
-      }, 150);
-
-      // Method 4: Toggle alwaysOnTop and invalidate webContents
-      setTimeout(() => {
-        if (mainWindow && !mainWindow.isDestroyed()) {
-          mainWindow.setAlwaysOnTop(!wasOnTop);
-          mainWindow.setAlwaysOnTop(wasOnTop);
-
-          if (mainWindow.webContents && !mainWindow.webContents.isDestroyed()) {
-            mainWindow.webContents.invalidate();
-          }
-
-          console.log('[PowerMonitor] Step 4: AlwaysOnTop toggle and webContents invalidation');
-        }
-      }, 250);
-
-      console.log('[PowerMonitor] Window restoration sequence initiated');
-    }
+    restoreWindowChrome();
   });
+
+  // Aggressive window chrome restoration function
+  function restoreWindowChrome() {
+    if (!mainWindow || mainWindow.isDestroyed()) {
+      console.log('[PowerMonitor] Window does not exist, skipping restoration');
+      return;
+    }
+
+    console.log('[PowerMonitor] Starting AGGRESSIVE window restoration...');
+
+    // Save current window state
+    const wasVisible = mainWindow.isVisible();
+    const wasMaximized = mainWindow.isMaximized();
+    const wasMinimized = mainWindow.isMinimized();
+    const wasOnTop = mainWindow.isAlwaysOnTop();
+    const currentBounds = mainWindow.getBounds();
+
+    // Step 1: Toggle movable/resizable (100ms)
+    mainWindow.setMovable(false);
+    mainWindow.setResizable(false);
+    setTimeout(() => {
+      if (mainWindow && !mainWindow.isDestroyed()) {
+        mainWindow.setMovable(true);
+        mainWindow.setResizable(true);
+        console.log('[PowerMonitor] ✓ Step 1: Toggled movable/resizable');
+      }
+    }, 100);
+
+    // Step 2: Force bounds update (300ms)
+    setTimeout(() => {
+      if (mainWindow && !mainWindow.isDestroyed()) {
+        mainWindow.setBounds(currentBounds);
+        console.log('[PowerMonitor] ✓ Step 2: Forced bounds refresh');
+      }
+    }, 300);
+
+    // Step 3: MAXIMIZE/RESTORE cycle - this is the DWM killer move (500ms)
+    setTimeout(() => {
+      if (mainWindow && !mainWindow.isDestroyed() && !wasMaximized && !wasMinimized) {
+        console.log('[PowerMonitor] ⚡ Step 3: Starting maximize/restore cycle...');
+        mainWindow.maximize();
+        setTimeout(() => {
+          if (mainWindow && !mainWindow.isDestroyed()) {
+            mainWindow.unmaximize();
+            mainWindow.setBounds(currentBounds);
+            console.log('[PowerMonitor] ✓ Step 3: Maximize/restore cycle completed');
+          }
+        }, 200);
+      }
+    }, 500);
+
+    // Step 4: Hide/show cycle for visible windows (800ms)
+    setTimeout(() => {
+      if (mainWindow && !mainWindow.isDestroyed()) {
+        if (wasVisible && !wasMinimized) {
+          console.log('[PowerMonitor] ⚡ Step 4: Hide/show cycle...');
+          mainWindow.hide();
+          setTimeout(() => {
+            if (mainWindow && !mainWindow.isDestroyed()) {
+              mainWindow.show();
+              mainWindow.focus();
+              console.log('[PowerMonitor] ✓ Step 4: Hide/show completed');
+            }
+          }, 100);
+        }
+      }
+    }, 800);
+
+    // Step 5: Minimize/restore cycle if window was visible (1100ms)
+    setTimeout(() => {
+      if (mainWindow && !mainWindow.isDestroyed() && wasVisible && !wasMinimized) {
+        console.log('[PowerMonitor] ⚡ Step 5: Minimize/restore cycle...');
+        mainWindow.minimize();
+        setTimeout(() => {
+          if (mainWindow && !mainWindow.isDestroyed()) {
+            mainWindow.restore();
+            mainWindow.focus();
+            console.log('[PowerMonitor] ✓ Step 5: Minimize/restore completed');
+          }
+        }, 150);
+      }
+    }, 1100);
+
+    // Step 6: Toggle alwaysOnTop and invalidate webContents (1400ms)
+    setTimeout(() => {
+      if (mainWindow && !mainWindow.isDestroyed()) {
+        mainWindow.setAlwaysOnTop(!wasOnTop);
+        setTimeout(() => {
+          if (mainWindow && !mainWindow.isDestroyed()) {
+            mainWindow.setAlwaysOnTop(wasOnTop);
+
+            if (mainWindow.webContents && !mainWindow.webContents.isDestroyed()) {
+              mainWindow.webContents.invalidate();
+            }
+            console.log('[PowerMonitor] ✓ Step 6: AlwaysOnTop toggle and invalidation');
+          }
+        }, 50);
+      }
+    }, 1400);
+
+    // Step 7: Final bounds restoration and focus (1600ms)
+    setTimeout(() => {
+      if (mainWindow && !mainWindow.isDestroyed()) {
+        if (wasMaximized) {
+          mainWindow.maximize();
+        } else {
+          mainWindow.setBounds(currentBounds);
+        }
+        if (wasVisible && !wasMinimized) {
+          mainWindow.focus();
+        }
+        console.log('[PowerMonitor] ✓ Step 7: Final restoration complete');
+        console.log('[PowerMonitor] 🎉 AGGRESSIVE restoration sequence COMPLETE');
+      }
+    }, 1600);
+  }
 });
 
 app.on('window-all-closed', () => {
