@@ -373,6 +373,102 @@ function createWebview(serviceId) {
     require('electron').shell.openExternal(e.url);
   });
 
+  // Context menu for images (right-click -> Copy Image)
+  webview.addEventListener('context-menu', (e) => {
+    e.preventDefault();
+
+    // Check if the context menu was triggered on an image
+    const { x, y, mediaType, srcURL } = e.params;
+
+    if (mediaType === 'image' && srcURL) {
+      // Create a custom context menu
+      const contextMenuHtml = `
+        <div id="custom-context-menu" style="
+          position: fixed;
+          left: ${x}px;
+          top: ${y}px;
+          background: #2d2d2d;
+          border: 1px solid #444;
+          border-radius: 4px;
+          padding: 4px 0;
+          box-shadow: 0 2px 8px rgba(0,0,0,0.5);
+          z-index: 99999;
+          font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+          font-size: 13px;
+          min-width: 150px;
+        ">
+          <div class="context-menu-item" data-action="copy-image" data-url="${srcURL}" style="
+            padding: 6px 12px;
+            cursor: pointer;
+            color: #fff;
+            user-select: none;
+          " onmouseover="this.style.background='#007acc'" onmouseout="this.style.background='transparent'">
+            Copy Image
+          </div>
+          <div class="context-menu-item" data-action="open-image" data-url="${srcURL}" style="
+            padding: 6px 12px;
+            cursor: pointer;
+            color: #fff;
+            user-select: none;
+          " onmouseover="this.style.background='#007acc'" onmouseout="this.style.background='transparent'">
+            Open Image in Browser
+          </div>
+        </div>
+      `;
+
+      // Remove any existing context menu
+      const existingMenu = document.getElementById('custom-context-menu');
+      if (existingMenu) {
+        existingMenu.remove();
+      }
+
+      // Add context menu to DOM
+      document.body.insertAdjacentHTML('beforeend', contextMenuHtml);
+
+      const menu = document.getElementById('custom-context-menu');
+
+      // Handle menu item clicks
+      menu.querySelectorAll('.context-menu-item').forEach(item => {
+        item.addEventListener('click', async () => {
+          const action = item.dataset.action;
+          const url = item.dataset.url;
+
+          if (action === 'copy-image') {
+            console.log('Copying image:', url);
+            try {
+              const result = await window.electron.copyImageToClipboard(url);
+              if (result.success) {
+                console.log('Image copied to clipboard successfully');
+                // Optional: Show a brief success indicator
+                showCopyNotification();
+              } else {
+                console.error('Failed to copy image:', result.error);
+              }
+            } catch (error) {
+              console.error('Error copying image:', error);
+            }
+          } else if (action === 'open-image') {
+            window.open(url, '_blank');
+          }
+
+          menu.remove();
+        });
+      });
+
+      // Remove menu when clicking outside
+      const removeMenu = (event) => {
+        if (!menu.contains(event.target)) {
+          menu.remove();
+          document.removeEventListener('click', removeMenu);
+        }
+      };
+
+      setTimeout(() => {
+        document.addEventListener('click', removeMenu);
+      }, 100);
+    }
+  });
+
   // Handle webview crashes
   webview.addEventListener('render-process-gone', (e) => {
     console.error(`[${serviceId}] Webview crashed:`, e.details);
@@ -1030,6 +1126,53 @@ async function updateMemoryStats() {
   document.getElementById('heap-used').textContent = `${memoryInfo.app.heapUsed} MB`;
   document.getElementById('current-usage').textContent = memoryInfo.app.rss;
   document.getElementById('system-free').textContent = `${memoryInfo.system.free} MB`;
+}
+
+// Show brief notification when image is copied
+function showCopyNotification() {
+  const notification = document.createElement('div');
+  notification.style.cssText = `
+    position: fixed;
+    bottom: 20px;
+    right: 20px;
+    background: #28a745;
+    color: white;
+    padding: 12px 20px;
+    border-radius: 4px;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.3);
+    z-index: 99999;
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+    font-size: 14px;
+    animation: slideIn 0.3s ease-out;
+  `;
+  notification.textContent = '✓ Image copied to clipboard';
+
+  // Add animation
+  const style = document.createElement('style');
+  style.textContent = `
+    @keyframes slideIn {
+      from {
+        transform: translateX(100%);
+        opacity: 0;
+      }
+      to {
+        transform: translateX(0);
+        opacity: 1;
+      }
+    }
+  `;
+  document.head.appendChild(style);
+
+  document.body.appendChild(notification);
+
+  setTimeout(() => {
+    notification.style.transition = 'opacity 0.3s ease-out';
+    notification.style.opacity = '0';
+    setTimeout(() => {
+      notification.remove();
+      style.remove();
+    }, 300);
+  }, 2000);
 }
 
 // Initialize on load

@@ -22,5 +22,8 @@ contextBridge.exposeInMainWorld('electron', {
   getAlwaysOnTop: () => ipcRenderer.invoke('get-always-on-top'),
 
   // Session management
-  clearServiceSession: (serviceId) => ipcRenderer.invoke('clear-service-session', serviceId)
+  clearServiceSession: (serviceId) => ipcRenderer.invoke('clear-service-session', serviceId),
+
+  // Clipboard operations
+  copyImageToClipboard: (imageUrl) => ipcRenderer.invoke('copy-image-to-clipboard', imageUrl)
 });

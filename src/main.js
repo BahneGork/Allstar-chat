@@ -1,4 +1,4 @@
-const { app, BrowserWindow, ipcMain, nativeImage, Tray, Menu, Notification, session, powerMonitor } = require('electron');
+const { app, BrowserWindow, ipcMain, nativeImage, Tray, Menu, Notification, session, powerMonitor, clipboard } = require('electron');
 const path = require('path');
 const fs = require('fs');
 
@@ -424,6 +424,60 @@ ipcMain.handle('clear-service-session', async (_, serviceId) => {
     }
   } catch (error) {
     console.error(`[Session] Failed to clear session for ${serviceId}:`, error);
+    return { success: false, error: error.message };
+  }
+});
+
+ipcMain.handle('copy-image-to-clipboard', async (_, imageUrl) => {
+  console.log(`[Clipboard] Copying image to clipboard: ${imageUrl}`);
+  try {
+    const https = require('https');
+    const http = require('http');
+    const { URL } = require('url');
+
+    // Determine protocol
+    const parsedUrl = new URL(imageUrl);
+    const protocol = parsedUrl.protocol === 'https:' ? https : http;
+
+    return new Promise((resolve, reject) => {
+      protocol.get(imageUrl, (response) => {
+        const chunks = [];
+
+        response.on('data', (chunk) => {
+          chunks.push(chunk);
+        });
+
+        response.on('end', () => {
+          try {
+            const buffer = Buffer.concat(chunks);
+            const image = nativeImage.createFromBuffer(buffer);
+
+            if (image.isEmpty()) {
+              console.error('[Clipboard] Failed to create image from buffer');
+              resolve({ success: false, error: 'Invalid image data' });
+              return;
+            }
+
+            clipboard.writeImage(image);
+            console.log('[Clipboard] Image copied successfully');
+            resolve({ success: true });
+          } catch (error) {
+            console.error('[Clipboard] Error processing image:', error);
+            resolve({ success: false, error: error.message });
+          }
+        });
+
+        response.on('error', (error) => {
+          console.error('[Clipboard] Error downloading image:', error);
+          resolve({ success: false, error: error.message });
+        });
+      }).on('error', (error) => {
+        console.error('[Clipboard] Error fetching image:', error);
+        resolve({ success: false, error: error.message });
+      });
+    });
+  } catch (error) {
+    console.error('[Clipboard] Failed to copy image:', error);
     return { success: false, error: error.message };
   }
 });
@@ -911,6 +965,7 @@ app.on('will-quit', () => {
     ipcMain.removeHandler('show-notification');
     ipcMain.removeHandler('toggle-always-on-top');
     ipcMain.removeHandler('get-always-on-top');
+    ipcMain.removeHandler('copy-image-to-clipboard');
   } catch (e) {}
 
   // Force close main window
