@@ -1,4 +1,4 @@
-const { app, BrowserWindow, ipcMain, nativeImage, Tray, Menu, Notification, session, powerMonitor, clipboard } = require('electron');
+const { app, BrowserWindow, ipcMain, nativeImage, Tray, Menu, Notification, session, powerMonitor, clipboard, shell } = require('electron');
 const path = require('path');
 const fs = require('fs');
 
@@ -428,56 +428,38 @@ ipcMain.handle('clear-service-session', async (_, serviceId) => {
   }
 });
 
-ipcMain.handle('copy-image-to-clipboard', async (_, imageUrl) => {
-  console.log(`[Clipboard] Copying image to clipboard: ${imageUrl}`);
+ipcMain.handle('copy-image-to-clipboard', async (_, imageDataUrl) => {
+  console.log(`[Clipboard] Copying image to clipboard (data URL length: ${imageDataUrl?.length || 0})`);
   try {
-    const https = require('https');
-    const http = require('http');
-    const { URL } = require('url');
+    if (!imageDataUrl || !imageDataUrl.startsWith('data:image')) {
+      console.error('[Clipboard] Invalid data URL format');
+      return { success: false, error: 'Invalid image data format' };
+    }
 
-    // Determine protocol
-    const parsedUrl = new URL(imageUrl);
-    const protocol = parsedUrl.protocol === 'https:' ? https : http;
+    // Create image from data URL
+    const image = nativeImage.createFromDataURL(imageDataUrl);
 
-    return new Promise((resolve, reject) => {
-      protocol.get(imageUrl, (response) => {
-        const chunks = [];
+    if (image.isEmpty()) {
+      console.error('[Clipboard] Failed to create image from data URL');
+      return { success: false, error: 'Invalid image data' };
+    }
 
-        response.on('data', (chunk) => {
-          chunks.push(chunk);
-        });
-
-        response.on('end', () => {
-          try {
-            const buffer = Buffer.concat(chunks);
-            const image = nativeImage.createFromBuffer(buffer);
-
-            if (image.isEmpty()) {
-              console.error('[Clipboard] Failed to create image from buffer');
-              resolve({ success: false, error: 'Invalid image data' });
-              return;
-            }
-
-            clipboard.writeImage(image);
-            console.log('[Clipboard] Image copied successfully');
-            resolve({ success: true });
-          } catch (error) {
-            console.error('[Clipboard] Error processing image:', error);
-            resolve({ success: false, error: error.message });
-          }
-        });
-
-        response.on('error', (error) => {
-          console.error('[Clipboard] Error downloading image:', error);
-          resolve({ success: false, error: error.message });
-        });
-      }).on('error', (error) => {
-        console.error('[Clipboard] Error fetching image:', error);
-        resolve({ success: false, error: error.message });
-      });
-    });
+    clipboard.writeImage(image);
+    console.log('[Clipboard] Image copied successfully');
+    return { success: true };
   } catch (error) {
     console.error('[Clipboard] Failed to copy image:', error);
+    return { success: false, error: error.message };
+  }
+});
+
+ipcMain.handle('open-external', async (_, url) => {
+  console.log(`[Shell] Opening external URL: ${url}`);
+  try {
+    await shell.openExternal(url);
+    return { success: true };
+  } catch (error) {
+    console.error('[Shell] Failed to open external URL:', error);
     return { success: false, error: error.message };
   }
 });
@@ -966,6 +948,7 @@ app.on('will-quit', () => {
     ipcMain.removeHandler('toggle-always-on-top');
     ipcMain.removeHandler('get-always-on-top');
     ipcMain.removeHandler('copy-image-to-clipboard');
+    ipcMain.removeHandler('open-external');
   } catch (e) {}
 
   // Force close main window

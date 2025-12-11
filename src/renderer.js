@@ -381,6 +381,9 @@ function createWebview(serviceId) {
     const { x, y, mediaType, srcURL } = e.params;
 
     if (mediaType === 'image' && srcURL) {
+      // Escape URL for safe embedding in HTML attributes
+      const escapedUrl = srcURL.replace(/"/g, '&quot;').replace(/'/g, '&#39;');
+
       // Create a custom context menu
       const contextMenuHtml = `
         <div id="custom-context-menu" style="
@@ -397,7 +400,7 @@ function createWebview(serviceId) {
           font-size: 13px;
           min-width: 150px;
         ">
-          <div class="context-menu-item" data-action="copy-image" data-url="${srcURL}" style="
+          <div class="context-menu-item" data-action="copy-image" style="
             padding: 6px 12px;
             cursor: pointer;
             color: #fff;
@@ -405,7 +408,7 @@ function createWebview(serviceId) {
           " onmouseover="this.style.background='#007acc'" onmouseout="this.style.background='transparent'">
             Copy Image
           </div>
-          <div class="context-menu-item" data-action="open-image" data-url="${srcURL}" style="
+          <div class="context-menu-item" data-action="open-image" style="
             padding: 6px 12px;
             cursor: pointer;
             color: #fff;
@@ -431,24 +434,64 @@ function createWebview(serviceId) {
       menu.querySelectorAll('.context-menu-item').forEach(item => {
         item.addEventListener('click', async () => {
           const action = item.dataset.action;
-          const url = item.dataset.url;
 
           if (action === 'copy-image') {
-            console.log('Copying image:', url);
+            console.log('Copying image from webview:', srcURL);
             try {
-              const result = await window.electron.copyImageToClipboard(url);
-              if (result.success) {
-                console.log('Image copied to clipboard successfully');
-                // Optional: Show a brief success indicator
-                showCopyNotification();
+              // Execute script inside the webview to get the image as a data URL
+              // This works around CORS and authentication issues
+              const imageDataUrl = await webview.executeJavaScript(`
+                (async function() {
+                  try {
+                    // Find the image element by src
+                    const img = document.querySelector('img[src="${escapedUrl}"]');
+                    if (!img) {
+                      console.error('Image element not found');
+                      return null;
+                    }
+
+                    // Create a canvas and draw the image
+                    const canvas = document.createElement('canvas');
+                    canvas.width = img.naturalWidth || img.width;
+                    canvas.height = img.naturalHeight || img.height;
+
+                    const ctx = canvas.getContext('2d');
+                    ctx.drawImage(img, 0, 0);
+
+                    // Get data URL
+                    return canvas.toDataURL('image/png');
+                  } catch (error) {
+                    console.error('Error converting image:', error);
+                    return null;
+                  }
+                })();
+              `);
+
+              if (imageDataUrl) {
+                const result = await window.electron.copyImageToClipboard(imageDataUrl);
+                if (result.success) {
+                  console.log('Image copied to clipboard successfully');
+                  showCopyNotification();
+                } else {
+                  console.error('Failed to copy image:', result.error);
+                  showErrorNotification('Failed to copy image');
+                }
               } else {
-                console.error('Failed to copy image:', result.error);
+                console.error('Failed to get image data from webview');
+                showErrorNotification('Failed to get image data');
               }
             } catch (error) {
               console.error('Error copying image:', error);
+              showErrorNotification('Error copying image');
             }
           } else if (action === 'open-image') {
-            window.open(url, '_blank');
+            console.log('Opening image in browser:', srcURL);
+            try {
+              await window.electron.openExternal(srcURL);
+            } catch (error) {
+              console.error('Error opening image:', error);
+              showErrorNotification('Failed to open image');
+            }
           }
 
           menu.remove();
@@ -1130,12 +1173,22 @@ async function updateMemoryStats() {
 
 // Show brief notification when image is copied
 function showCopyNotification() {
+  showToastNotification('✓ Image copied to clipboard', '#28a745');
+}
+
+// Show error notification
+function showErrorNotification(message) {
+  showToastNotification('✗ ' + message, '#dc3545');
+}
+
+// Generic toast notification
+function showToastNotification(message, bgColor) {
   const notification = document.createElement('div');
   notification.style.cssText = `
     position: fixed;
     bottom: 20px;
     right: 20px;
-    background: #28a745;
+    background: ${bgColor};
     color: white;
     padding: 12px 20px;
     border-radius: 4px;
@@ -1145,23 +1198,26 @@ function showCopyNotification() {
     font-size: 14px;
     animation: slideIn 0.3s ease-out;
   `;
-  notification.textContent = '✓ Image copied to clipboard';
+  notification.textContent = message;
 
-  // Add animation
-  const style = document.createElement('style');
-  style.textContent = `
-    @keyframes slideIn {
-      from {
-        transform: translateX(100%);
-        opacity: 0;
+  // Add animation style if not already present
+  if (!document.getElementById('toast-animation-style')) {
+    const style = document.createElement('style');
+    style.id = 'toast-animation-style';
+    style.textContent = `
+      @keyframes slideIn {
+        from {
+          transform: translateX(100%);
+          opacity: 0;
+        }
+        to {
+          transform: translateX(0);
+          opacity: 1;
+        }
       }
-      to {
-        transform: translateX(0);
-        opacity: 1;
-      }
-    }
-  `;
-  document.head.appendChild(style);
+    `;
+    document.head.appendChild(style);
+  }
 
   document.body.appendChild(notification);
 
@@ -1170,7 +1226,6 @@ function showCopyNotification() {
     notification.style.opacity = '0';
     setTimeout(() => {
       notification.remove();
-      style.remove();
     }, 300);
   }, 2000);
 }

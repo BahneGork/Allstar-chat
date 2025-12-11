@@ -25,5 +25,8 @@ contextBridge.exposeInMainWorld('electron', {
   clearServiceSession: (serviceId) => ipcRenderer.invoke('clear-service-session', serviceId),
 
   // Clipboard operations
-  copyImageToClipboard: (imageUrl) => ipcRenderer.invoke('copy-image-to-clipboard', imageUrl)
+  copyImageToClipboard: (imageDataUrl) => ipcRenderer.invoke('copy-image-to-clipboard', imageDataUrl),
+
+  // Shell operations
+  openExternal: (url) => ipcRenderer.invoke('open-external', url)
 });
