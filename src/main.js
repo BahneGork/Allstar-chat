@@ -453,13 +453,37 @@ ipcMain.handle('copy-image-to-clipboard', async (_, imageDataUrl) => {
   }
 });
 
-ipcMain.handle('open-external', async (_, url) => {
-  console.log(`[Shell] Opening external URL: ${url}`);
+ipcMain.handle('open-new-window', async (_, url) => {
+  console.log(`[Window] Opening new window for URL: ${url}`);
   try {
-    await shell.openExternal(url);
+    // Create a new browser window
+    const newWindow = new BrowserWindow({
+      width: 1200,
+      height: 800,
+      webPreferences: {
+        nodeIntegration: false,
+        contextIsolation: true,
+        sandbox: true
+      }
+    });
+
+    // Load the URL
+    newWindow.loadURL(url);
+
+    // Open links in this window in external browser
+    newWindow.webContents.setWindowOpenHandler(({ url }) => {
+      shell.openExternal(url);
+      return { action: 'deny' };
+    });
+
+    // Clean up on close
+    newWindow.on('closed', () => {
+      console.log(`[Window] New window closed`);
+    });
+
     return { success: true };
   } catch (error) {
-    console.error('[Shell] Failed to open external URL:', error);
+    console.error('[Window] Failed to open new window:', error);
     return { success: false, error: error.message };
   }
 });
@@ -948,7 +972,7 @@ app.on('will-quit', () => {
     ipcMain.removeHandler('toggle-always-on-top');
     ipcMain.removeHandler('get-always-on-top');
     ipcMain.removeHandler('copy-image-to-clipboard');
-    ipcMain.removeHandler('open-external');
+    ipcMain.removeHandler('open-new-window');
   } catch (e) {}
 
   // Force close main window

@@ -27,6 +27,6 @@ contextBridge.exposeInMainWorld('electron', {
   // Clipboard operations
   copyImageToClipboard: (imageDataUrl) => ipcRenderer.invoke('copy-image-to-clipboard', imageDataUrl),
 
-  // Shell operations
-  openExternal: (url) => ipcRenderer.invoke('open-external', url)
+  // Window operations
+  openNewWindow: (url) => ipcRenderer.invoke('open-new-window', url)
 });

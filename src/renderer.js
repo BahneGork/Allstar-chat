@@ -370,10 +370,10 @@ function createWebview(serviceId) {
   });
 
   webview.addEventListener('new-window', (e) => {
-    // Use IPC bridge instead of require('electron') which doesn't work with context isolation
-    console.log(`[${serviceId}] Opening external link:`, e.url);
-    window.electron.openExternal(e.url).catch(err => {
-      console.error(`[${serviceId}] Failed to open external link:`, err);
+    // Open in a new AllStar window
+    console.log(`[${serviceId}] Opening link in new window:`, e.url);
+    window.electron.openNewWindow(e.url).catch(err => {
+      console.error(`[${serviceId}] Failed to open new window:`, err);
     });
   });
 
@@ -489,46 +489,10 @@ function createWebview(serviceId) {
               showErrorNotification('Error copying image');
             }
           } else if (action === 'open-image') {
-            console.log('Opening image in browser:', srcURL);
-            console.log('Image URL type:', srcURL.startsWith('blob:') ? 'blob' : srcURL.startsWith('data:') ? 'data' : 'http/https');
+            console.log('Opening image in new window:', srcURL);
             try {
-              // Blob URLs and data URLs can't be opened externally
-              // Try to get the actual URL from the webview if it's a blob/data URL
-              if (srcURL.startsWith('blob:') || srcURL.startsWith('data:')) {
-                console.log('Blob/data URL detected - attempting to find original src...');
-
-                // Try to find the original image URL by checking common attributes
-                const originalUrl = await webview.executeJavaScript(`
-                  (function() {
-                    try {
-                      const img = document.querySelector('img[src="${escapedUrl}"]');
-                      if (!img) return null;
-
-                      // Check for data attributes that might contain the original URL
-                      const originalSrc = img.getAttribute('data-src') ||
-                                         img.getAttribute('data-original') ||
-                                         img.getAttribute('data-url') ||
-                                         img.parentElement?.getAttribute('href');
-
-                      return originalSrc || null;
-                    } catch (e) {
-                      console.error('Error finding original URL:', e);
-                      return null;
-                    }
-                  })();
-                `);
-
-                if (originalUrl && !originalUrl.startsWith('blob:') && !originalUrl.startsWith('data:')) {
-                  console.log('Found original URL:', originalUrl);
-                  await window.electron.openExternal(originalUrl);
-                } else {
-                  console.warn('Could not find openable URL for blob/data image');
-                  showErrorNotification('Cannot open this image type in browser');
-                }
-              } else {
-                // Regular HTTP/HTTPS URL
-                await window.electron.openExternal(srcURL);
-              }
+              // Open the image in a new AllStar window
+              await window.electron.openNewWindow(srcURL);
             } catch (error) {
               console.error('Error opening image:', error);
               showErrorNotification('Failed to open image');
