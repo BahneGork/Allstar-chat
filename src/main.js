@@ -4,7 +4,7 @@ const fs = require('fs');
 
 // Set app name for Task Manager (multiple methods for Windows compatibility)
 app.setName('AllStar');
-process.title = 'AllStar';
+process.title = 'AllStar v' + require('../package.json').version;
 if (process.platform === 'win32') {
   app.setAppUserModelId('com.allstar.app');
 }
@@ -67,7 +67,7 @@ function getDefaultConfig() {
       alwaysOnTop: false // Keep window always on top
     },
     services: [
-      { id: 'messenger', name: 'Facebook Messenger', url: 'https://www.messenger.com', enabled: true },
+      { id: 'messenger', name: 'Facebook Messenger', url: 'https://www.facebook.com/messages', enabled: true },
       { id: 'googlechat', name: 'Google Chat', url: 'https://chat.google.com', enabled: true },
       { id: 'wordle', name: 'Wordle', url: 'https://www.nytimes.com/games/wordle/index.html', enabled: false }
     ]
@@ -88,6 +88,13 @@ function migrateConfig(config) {
       config.services.push(defaultService);
     }
   });
+
+  // Migrate messenger.com URL to facebook.com/messages (messenger.com shutting down April 2026)
+  const messengerService = config.services.find(s => s.id === 'messenger');
+  if (messengerService && messengerService.url === 'https://www.messenger.com') {
+    console.log('Migrating: Updating Messenger URL from messenger.com to facebook.com/messages');
+    messengerService.url = 'https://www.facebook.com/messages';
+  }
 
   saveConfig(config);
   return config;
@@ -290,6 +297,7 @@ function createWindow() {
   });
 
   mainWindow.loadFile(path.join(__dirname, 'index.html'));
+  mainWindow.setTitle('AllStar v' + app.getVersion());
 
   // Save window bounds on resize/move
   mainWindow.on('resize', () => saveBounds());
