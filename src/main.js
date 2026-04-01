@@ -4,7 +4,7 @@ const fs = require('fs');
 
 // Set app name for Task Manager (multiple methods for Windows compatibility)
 app.setName('AllStar');
-process.title = 'AllStar';
+process.title = 'AllStar v' + require('../package.json').version;
 if (process.platform === 'win32') {
   app.setAppUserModelId('com.allstar.app');
 }
@@ -297,6 +297,7 @@ function createWindow() {
   });
 
   mainWindow.loadFile(path.join(__dirname, 'index.html'));
+  mainWindow.setTitle('AllStar v' + app.getVersion());
 
   // Save window bounds on resize/move
   mainWindow.on('resize', () => saveBounds());
