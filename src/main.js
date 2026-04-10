@@ -54,6 +54,7 @@ function getDefaultConfig() {
     settings: {
       systemTray: true,
       notifications: true,
+      muteMessengerNotifications: false,
       persistSessions: true,
       autoSuspendInactiveTabs: true,
       tabSuspensionTimeout: 30,

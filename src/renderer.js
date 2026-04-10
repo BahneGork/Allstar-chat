@@ -175,6 +175,15 @@ function blockWebviewNotifications(webview) {
 
 // Allow notifications from webview (for inactive tabs)
 function allowWebviewNotifications(webview) {
+  const serviceId = webview.dataset.serviceId;
+  const isMuted = serviceId === 'messenger' && currentSettings.muteMessengerNotifications;
+
+  if (isMuted) {
+    // Keep notifications blocked even for inactive tab when muted
+    blockWebviewNotifications(webview);
+    return;
+  }
+
   try {
     webview.executeJavaScript(`
       (function() {
@@ -935,16 +944,21 @@ function updateBadgeCount(serviceId, count) {
     // Show notification if count increased and tab is not active
     console.log(`[${serviceId}] Notification check: count=${count}, prev=${previousCount}, active=${serviceId === activeTabId}, enabled=${currentSettings.notifications}`);
     if (count > previousCount && serviceId !== activeTabId && currentSettings.notifications) {
-      const service = currentServices.find(s => s.id === serviceId);
-      if (service) {
-        const serviceName = service.name;
-        const messageCount = count > 99 ? '99+' : count;
-        console.log(`[${serviceId}] Triggering notification: ${serviceName} - ${messageCount} messages`);
-        window.electron.showNotification(
-          serviceName,
-          `${messageCount} unread message${count > 1 ? 's' : ''}`,
-          serviceId
-        );
+      const isMuted = serviceId === 'messenger' && currentSettings.muteMessengerNotifications;
+      if (!isMuted) {
+        const service = currentServices.find(s => s.id === serviceId);
+        if (service) {
+          const serviceName = service.name;
+          const messageCount = count > 99 ? '99+' : count;
+          console.log(`[${serviceId}] Triggering notification: ${serviceName} - ${messageCount} messages`);
+          window.electron.showNotification(
+            serviceName,
+            `${messageCount} unread message${count > 1 ? 's' : ''}`,
+            serviceId
+          );
+        }
+      } else {
+        console.log(`[${serviceId}] Notification suppressed (Messenger muted)`);
       }
     }
   } else {
@@ -1084,6 +1098,7 @@ async function openSettings() {
   document.getElementById('setting-startOnBoot').checked = currentSettings.startOnBoot;
   document.getElementById('setting-startMinimized').checked = currentSettings.startMinimized;
   document.getElementById('setting-notifications').checked = currentSettings.notifications;
+  document.getElementById('setting-muteMessengerNotifications').checked = currentSettings.muteMessengerNotifications || false;
   document.getElementById('setting-hardwareAcceleration').checked = currentSettings.hardwareAcceleration;
   document.getElementById('setting-preloadServices').checked = currentSettings.preloadServices;
   document.getElementById('setting-cacheSize').value = currentSettings.cacheSize;
@@ -1122,6 +1137,7 @@ async function saveSettings() {
     startOnBoot: document.getElementById('setting-startOnBoot').checked,
     startMinimized: document.getElementById('setting-startMinimized').checked,
     notifications: document.getElementById('setting-notifications').checked,
+    muteMessengerNotifications: document.getElementById('setting-muteMessengerNotifications').checked,
     hardwareAcceleration: document.getElementById('setting-hardwareAcceleration').checked,
     preloadServices: document.getElementById('setting-preloadServices').checked,
     cacheSize: parseInt(document.getElementById('setting-cacheSize').value),
