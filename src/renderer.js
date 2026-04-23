@@ -451,30 +451,23 @@ function createWebview(serviceId) {
           if (action === 'copy-image') {
             console.log('Copying image from webview:', srcURL);
             try {
-              // Execute script inside the webview to get the image as a data URL
-              // This works around CORS and authentication issues
+              // Fetch the image from inside the webview so it uses the webview's
+              // authenticated session cookies, avoiding CORS/tainted-canvas errors.
               const imageDataUrl = await webview.executeJavaScript(`
                 (async function() {
+                  const url = ${JSON.stringify(srcURL)};
                   try {
-                    // Find the image element by src
-                    const img = document.querySelector('img[src="${escapedUrl}"]');
-                    if (!img) {
-                      console.error('Image element not found');
-                      return null;
-                    }
-
-                    // Create a canvas and draw the image
-                    const canvas = document.createElement('canvas');
-                    canvas.width = img.naturalWidth || img.width;
-                    canvas.height = img.naturalHeight || img.height;
-
-                    const ctx = canvas.getContext('2d');
-                    ctx.drawImage(img, 0, 0);
-
-                    // Get data URL
-                    return canvas.toDataURL('image/png');
+                    const response = await fetch(url);
+                    if (!response.ok) return null;
+                    const blob = await response.blob();
+                    return new Promise((resolve) => {
+                      const reader = new FileReader();
+                      reader.onloadend = () => resolve(reader.result);
+                      reader.onerror = () => resolve(null);
+                      reader.readAsDataURL(blob);
+                    });
                   } catch (error) {
-                    console.error('Error converting image:', error);
+                    console.error('Error fetching image:', error);
                     return null;
                   }
                 })();
