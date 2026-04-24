@@ -741,8 +741,26 @@ app.whenReady().then(() => {
 
   createWindow();
 
-  // Handle Windows sleep/wake to fix title bar disappearing
-  // Also handle lock-screen events which can cause similar issues
+  // Handle Windows sleep/wake to fix title bar disappearing.
+  // Both 'resume' and 'unlock-screen' can fire after a sleep+lock cycle,
+  // so we use a flag to ensure restoration only runs once per wake event.
+  let restorePending = false;
+
+  function scheduleWindowChromeRestore(source) {
+    if (restorePending) {
+      console.log(`[PowerMonitor] Restoration already scheduled, ignoring ${source}`);
+      return;
+    }
+    restorePending = true;
+    console.log(`[PowerMonitor] ${source} - scheduling restoration in 2s (waiting for DWM)`);
+    // Wait 2 seconds before touching the window. Windows DWM needs time to
+    // re-initialize the compositor after sleep/wake before SetWindowPos calls work.
+    setTimeout(() => {
+      restorePending = false;
+      restoreWindowChrome();
+    }, 2000);
+  }
+
   powerMonitor.on('suspend', () => {
     console.log('[PowerMonitor] System going to sleep');
   });
@@ -752,129 +770,66 @@ app.whenReady().then(() => {
   });
 
   powerMonitor.on('unlock-screen', () => {
-    console.log('[PowerMonitor] Screen unlocked - triggering restoration');
-    restoreWindowChrome();
+    scheduleWindowChromeRestore('unlock-screen');
   });
 
   powerMonitor.on('resume', () => {
-    console.log('[PowerMonitor] System resumed from sleep');
-    restoreWindowChrome();
+    scheduleWindowChromeRestore('resume');
   });
 
-  // Aggressive window chrome restoration function
   function restoreWindowChrome() {
-    if (!mainWindow || mainWindow.isDestroyed()) {
-      console.log('[PowerMonitor] Window does not exist, skipping restoration');
-      return;
-    }
+    if (!mainWindow || mainWindow.isDestroyed()) return;
 
-    console.log('[PowerMonitor] Starting AGGRESSIVE window restoration...');
-
-    // Save current window state
     const wasVisible = mainWindow.isVisible();
     const wasMaximized = mainWindow.isMaximized();
     const wasMinimized = mainWindow.isMinimized();
-    const wasOnTop = mainWindow.isAlwaysOnTop();
     const currentBounds = mainWindow.getBounds();
 
-    // Step 1: Toggle movable/resizable (100ms)
-    mainWindow.setMovable(false);
-    mainWindow.setResizable(false);
-    setTimeout(() => {
-      if (mainWindow && !mainWindow.isDestroyed()) {
-        mainWindow.setMovable(true);
-        mainWindow.setResizable(true);
-        console.log('[PowerMonitor] ✓ Step 1: Toggled movable/resizable');
-      }
-    }, 100);
+    console.log('[PowerMonitor] Running window chrome restoration...');
 
-    // Step 2: Force bounds update (300ms)
+    // Step 1 (0ms): setSkipTaskbar toggle - tells Windows to remove then re-add
+    // the window to the shell, which forces DWM to repaint the non-client frame.
+    mainWindow.setSkipTaskbar(true);
     setTimeout(() => {
-      if (mainWindow && !mainWindow.isDestroyed()) {
-        mainWindow.setBounds(currentBounds);
-        console.log('[PowerMonitor] ✓ Step 2: Forced bounds refresh');
-      }
-    }, 300);
+      if (!mainWindow || mainWindow.isDestroyed()) return;
+      mainWindow.setSkipTaskbar(false);
+      console.log('[PowerMonitor] ✓ Step 1: setSkipTaskbar toggle');
+    }, 150);
 
-    // Step 3: MAXIMIZE/RESTORE cycle - this is the DWM killer move (500ms)
-    setTimeout(() => {
-      if (mainWindow && !mainWindow.isDestroyed() && !wasMaximized && !wasMinimized) {
-        console.log('[PowerMonitor] ⚡ Step 3: Starting maximize/restore cycle...');
-        mainWindow.maximize();
+    // Step 2 (300ms): hide/show for normal visible windows
+    if (wasVisible && !wasMinimized && !wasMaximized) {
+      setTimeout(() => {
+        if (!mainWindow || mainWindow.isDestroyed()) return;
+        mainWindow.hide();
         setTimeout(() => {
-          if (mainWindow && !mainWindow.isDestroyed()) {
-            mainWindow.unmaximize();
-            mainWindow.setBounds(currentBounds);
-            console.log('[PowerMonitor] ✓ Step 3: Maximize/restore cycle completed');
-          }
-        }, 200);
-      }
-    }, 500);
-
-    // Step 4: Hide/show cycle for visible windows (800ms)
-    setTimeout(() => {
-      if (mainWindow && !mainWindow.isDestroyed()) {
-        if (wasVisible && !wasMinimized) {
-          console.log('[PowerMonitor] ⚡ Step 4: Hide/show cycle...');
-          mainWindow.hide();
-          setTimeout(() => {
-            if (mainWindow && !mainWindow.isDestroyed()) {
-              mainWindow.show();
-              mainWindow.focus();
-              console.log('[PowerMonitor] ✓ Step 4: Hide/show completed');
-            }
-          }, 100);
-        }
-      }
-    }, 800);
-
-    // Step 5: Minimize/restore cycle if window was visible (1100ms)
-    setTimeout(() => {
-      if (mainWindow && !mainWindow.isDestroyed() && wasVisible && !wasMinimized) {
-        console.log('[PowerMonitor] ⚡ Step 5: Minimize/restore cycle...');
-        mainWindow.minimize();
-        setTimeout(() => {
-          if (mainWindow && !mainWindow.isDestroyed()) {
-            mainWindow.restore();
-            mainWindow.focus();
-            console.log('[PowerMonitor] ✓ Step 5: Minimize/restore completed');
-          }
-        }, 150);
-      }
-    }, 1100);
-
-    // Step 6: Toggle alwaysOnTop and invalidate webContents (1400ms)
-    setTimeout(() => {
-      if (mainWindow && !mainWindow.isDestroyed()) {
-        mainWindow.setAlwaysOnTop(!wasOnTop);
-        setTimeout(() => {
-          if (mainWindow && !mainWindow.isDestroyed()) {
-            mainWindow.setAlwaysOnTop(wasOnTop);
-
-            if (mainWindow.webContents && !mainWindow.webContents.isDestroyed()) {
-              mainWindow.webContents.invalidate();
-            }
-            console.log('[PowerMonitor] ✓ Step 6: AlwaysOnTop toggle and invalidation');
-          }
-        }, 50);
-      }
-    }, 1400);
-
-    // Step 7: Final bounds restoration and focus (1600ms)
-    setTimeout(() => {
-      if (mainWindow && !mainWindow.isDestroyed()) {
-        if (wasMaximized) {
-          mainWindow.maximize();
-        } else {
+          if (!mainWindow || mainWindow.isDestroyed()) return;
+          mainWindow.show();
           mainWindow.setBounds(currentBounds);
-        }
-        if (wasVisible && !wasMinimized) {
           mainWindow.focus();
-        }
-        console.log('[PowerMonitor] ✓ Step 7: Final restoration complete');
-        console.log('[PowerMonitor] 🎉 AGGRESSIVE restoration sequence COMPLETE');
-      }
-    }, 1600);
+          console.log('[PowerMonitor] ✓ Step 2: hide/show cycle');
+        }, 150);
+      }, 300);
+    }
+
+    // Step 2 (300ms): unmaximize/maximize for maximized windows
+    if (wasMaximized) {
+      setTimeout(() => {
+        if (!mainWindow || mainWindow.isDestroyed()) return;
+        mainWindow.unmaximize();
+        setTimeout(() => {
+          if (!mainWindow || mainWindow.isDestroyed()) return;
+          mainWindow.maximize();
+          console.log('[PowerMonitor] ✓ Step 2: unmaximize/maximize cycle');
+        }, 150);
+      }, 300);
+    }
+
+    // Step 3 (700ms): final focus
+    setTimeout(() => {
+      if (!mainWindow || mainWindow.isDestroyed()) return;
+      if (wasVisible && !wasMinimized) mainWindow.focus();
+      console.log('[PowerMonitor] ✓ Restoration complete');
+    }, 700);
   }
 });
 
