@@ -311,6 +311,22 @@ function createWindow() {
       console.log('Starting minimized to tray');
     } else {
       mainWindow.show();
+
+      // When Windows restores the previous session on boot ("continue where I left off"),
+      // DWM may not have registered the window frame yet. powerMonitor resume/unlock
+      // events don't fire on a cold boot, so we do a one-time deferred setSkipTaskbar
+      // toggle to force DWM to repaint the title bar after it has settled.
+      if (process.platform === 'win32') {
+        setTimeout(() => {
+          if (!mainWindow || mainWindow.isDestroyed()) return;
+          mainWindow.setSkipTaskbar(true);
+          setTimeout(() => {
+            if (!mainWindow || mainWindow.isDestroyed()) return;
+            mainWindow.setSkipTaskbar(false);
+            console.log('[Startup] Window chrome restoration complete');
+          }, 150);
+        }, 4000);
+      }
     }
   });
 
