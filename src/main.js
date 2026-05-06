@@ -307,15 +307,12 @@ function createWindow() {
   mainWindow.once('ready-to-show', () => {
     // Don't show window if start minimized is enabled and tray is available
     if (settings.startMinimized && tray) {
-      // Window stays hidden
       console.log('Starting minimized to tray');
     } else {
       mainWindow.show();
 
-      // When Windows restores the previous session on boot ("continue where I left off"),
-      // DWM may not have registered the window frame yet. powerMonitor resume/unlock
-      // events don't fire on a cold boot, so we do a one-time deferred setSkipTaskbar
-      // toggle to force DWM to repaint the title bar after it has settled.
+      // On Windows session restore ("continue where I left off"), DWM may not
+      // have registered the window frame yet. Force a repaint after boot settles.
       if (process.platform === 'win32') {
         setTimeout(() => {
           if (!mainWindow || mainWindow.isDestroyed()) return;
@@ -323,12 +320,20 @@ function createWindow() {
           setTimeout(() => {
             if (!mainWindow || mainWindow.isDestroyed()) return;
             mainWindow.setSkipTaskbar(false);
-            console.log('[Startup] Window chrome restoration complete');
           }, 150);
         }, 4000);
       }
     }
   });
+
+  // Fallback: if the window still hasn't appeared 15s after load (e.g. ready-to-show
+  // never fires due to a renderer error), force-show it so the app isn't stuck invisible.
+  setTimeout(() => {
+    if (mainWindow && !mainWindow.isDestroyed() && !mainWindow.isVisible()) {
+      console.log('[Startup] Fallback show triggered — window was not visible after 15s');
+      mainWindow.show();
+    }
+  }, 15000);
 
   mainWindow.on('close', (event) => {
     // Don't allow close to tray if tray isn't available
