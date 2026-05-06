@@ -252,8 +252,26 @@ function destroyTray() {
   }
 }
 
+function getValidatedBounds(bounds) {
+  const { screen } = require('electron');
+  if (bounds.x === undefined || bounds.y === undefined) return bounds;
+
+  const onScreen = screen.getAllDisplays().some(({ workArea: w }) =>
+    bounds.x < w.x + w.width &&
+    bounds.x + bounds.width > w.x &&
+    bounds.y < w.y + w.height &&
+    bounds.y + bounds.height > w.y
+  );
+
+  if (!onScreen) {
+    console.log('[Startup] Saved window position is off-screen — resetting to center');
+    return { width: bounds.width, height: bounds.height, x: undefined, y: undefined };
+  }
+  return bounds;
+}
+
 function createWindow() {
-  const bounds = store.get('windowBounds');
+  const bounds = getValidatedBounds(store.get('windowBounds'));
   const settings = store.get('settings');
 
   // Hardware acceleration setting
@@ -334,14 +352,14 @@ function createWindow() {
     }
   });
 
-  // Fallback: if the window still hasn't appeared 15s after load (e.g. ready-to-show
+  // Fallback: if the window still hasn't appeared 5s after load (e.g. ready-to-show
   // never fires due to a renderer error), force-show it so the app isn't stuck invisible.
   setTimeout(() => {
     if (mainWindow && !mainWindow.isDestroyed() && !mainWindow.isVisible()) {
-      console.log('[Startup] Fallback show triggered — window was not visible after 15s');
+      console.log('[Startup] Fallback show triggered — window was not visible after 5s');
       mainWindow.show();
     }
-  }, 15000);
+  }, 5000);
 
   mainWindow.on('close', (event) => {
     // Don't allow close to tray if tray isn't available
