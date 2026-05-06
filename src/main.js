@@ -28,15 +28,7 @@ const configPath = path.join(app.getPath('userData'), 'config.json');
 function loadConfig() {
   try {
     if (fs.existsSync(configPath)) {
-      const loaded = JSON.parse(fs.readFileSync(configPath, 'utf8'));
-      const defaults = getDefaultConfig();
-      // Merge with defaults so missing/new keys are always present.
-      // Prevents old or partial configs from leaving the app in a broken state.
-      return {
-        windowBounds: { ...defaults.windowBounds, ...loaded.windowBounds },
-        settings: { ...defaults.settings, ...loaded.settings },
-        services: loaded.services || defaults.services
-      };
+      return JSON.parse(fs.readFileSync(configPath, 'utf8'));
     }
   } catch (e) {
     console.error('Error loading config:', e);
@@ -252,27 +244,8 @@ function destroyTray() {
   }
 }
 
-function getValidatedBounds(bounds) {
-  if (bounds.x === undefined || bounds.y === undefined) return bounds;
-  try {
-    const onScreen = screen.getAllDisplays().some(({ workArea: w }) =>
-      bounds.x < w.x + w.width &&
-      bounds.x + bounds.width > w.x &&
-      bounds.y < w.y + w.height &&
-      bounds.y + bounds.height > w.y
-    );
-    if (!onScreen) {
-      console.log('[Startup] Saved window position is off-screen — resetting to center');
-      return { width: bounds.width, height: bounds.height, x: undefined, y: undefined };
-    }
-  } catch (e) {
-    console.error('[Startup] Error checking screen bounds, using saved position:', e);
-  }
-  return bounds;
-}
-
 function createWindow() {
-  const bounds = getValidatedBounds(store.get('windowBounds'));
+  const bounds = store.get('windowBounds');
   const settings = store.get('settings');
 
   // Hardware acceleration setting
