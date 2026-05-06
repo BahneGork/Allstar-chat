@@ -106,6 +106,25 @@ if (config.services) {
   config = migrateConfig(config);
 }
 
+// Migrate settings: fill in any keys that are missing from an older config
+function migrateSettingsKeys(config) {
+  const defaultSettings = getDefaultConfig().settings;
+  let changed = false;
+  for (const [key, defaultValue] of Object.entries(defaultSettings)) {
+    if (config.settings[key] === undefined) {
+      console.log(`[Config] Adding missing setting with default: ${key} = ${defaultValue}`);
+      config.settings[key] = defaultValue;
+      changed = true;
+    }
+  }
+  if (changed) saveConfig(config);
+  return config;
+}
+
+if (config.settings) {
+  config = migrateSettingsKeys(config);
+}
+
 // Store helper object to mimic electron-store API
 const store = {
   get: (key) => {
@@ -244,8 +263,30 @@ function destroyTray() {
   }
 }
 
+function getValidatedBounds(bounds) {
+  try {
+    const { x, y, width, height } = bounds;
+    if (x === undefined || x === null || y === undefined || y === null) {
+      return bounds;
+    }
+    const displays = screen.getAllDisplays();
+    const isOnScreen = displays.some(display => {
+      const db = display.bounds;
+      return x >= db.x && x < db.x + db.width && y >= db.y && y < db.y + db.height;
+    });
+    if (!isOnScreen) {
+      console.log(`[Window] Saved position (${x}, ${y}) is off-screen. Using default position.`);
+      return { width: width || 1200, height: height || 800 };
+    }
+    return bounds;
+  } catch (e) {
+    console.error('[Window] Error validating bounds:', e);
+    return { width: bounds.width || 1200, height: bounds.height || 800 };
+  }
+}
+
 function createWindow() {
-  const bounds = store.get('windowBounds');
+  const bounds = getValidatedBounds(store.get('windowBounds'));
   const settings = store.get('settings');
 
   // Hardware acceleration setting
@@ -305,20 +346,30 @@ function createWindow() {
   mainWindow.on('move', () => saveBounds());
 
   mainWindow.once('ready-to-show', () => {
-    // Don't show window if start minimized is enabled and tray is available
     if (settings.startMinimized && tray) {
       console.log('Starting minimized to tray');
+      if (tray.displayBalloon) {
+        tray.displayBalloon({
+          title: 'AllStar',
+          content: 'AllStar is running in the system tray. Click the tray icon to open.',
+          iconType: 'info'
+        });
+      }
     } else {
       mainWindow.show();
     }
   });
 
-  // Fallback: if the window still hasn't appeared 5s after load (e.g. ready-to-show
-  // never fires due to a renderer error), force-show it so the app isn't stuck invisible.
+  // Fallback: if the window is still invisible after 5s and it wasn't intentionally
+  // hidden by startMinimized, force-show it so the app isn't stuck invisible.
   setTimeout(() => {
     if (mainWindow && !mainWindow.isDestroyed() && !mainWindow.isVisible()) {
-      console.log('[Startup] Fallback show triggered — window was not visible after 5s');
-      mainWindow.show();
+      if (settings.startMinimized && tray) {
+        console.log('[Startup] Window hidden by startMinimized — already notified via balloon');
+      } else {
+        console.log('[Startup] Fallback show triggered — window was not visible after 5s');
+        mainWindow.show();
+      }
     }
   }, 5000);
 
