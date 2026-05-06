@@ -28,7 +28,15 @@ const configPath = path.join(app.getPath('userData'), 'config.json');
 function loadConfig() {
   try {
     if (fs.existsSync(configPath)) {
-      return JSON.parse(fs.readFileSync(configPath, 'utf8'));
+      const loaded = JSON.parse(fs.readFileSync(configPath, 'utf8'));
+      const defaults = getDefaultConfig();
+      // Merge with defaults so missing/new keys are always present.
+      // Prevents old or partial configs from leaving the app in a broken state.
+      return {
+        windowBounds: { ...defaults.windowBounds, ...loaded.windowBounds },
+        settings: { ...defaults.settings, ...loaded.settings },
+        services: loaded.services || defaults.services
+      };
     }
   } catch (e) {
     console.error('Error loading config:', e);
