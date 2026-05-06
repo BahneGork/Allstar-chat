@@ -337,19 +337,6 @@ function createWindow() {
       console.log('Starting minimized to tray');
     } else {
       mainWindow.show();
-
-      // On Windows session restore ("continue where I left off"), DWM may not
-      // have registered the window frame yet. Force a repaint after boot settles.
-      if (process.platform === 'win32') {
-        setTimeout(() => {
-          if (!mainWindow || mainWindow.isDestroyed()) return;
-          mainWindow.setSkipTaskbar(true);
-          setTimeout(() => {
-            if (!mainWindow || mainWindow.isDestroyed()) return;
-            mainWindow.setSkipTaskbar(false);
-          }, 150);
-        }, 4000);
-      }
     }
   });
 
