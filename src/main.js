@@ -1,4 +1,4 @@
-const { app, BrowserWindow, ipcMain, nativeImage, Tray, Menu, Notification, session, powerMonitor, clipboard, shell } = require('electron');
+const { app, BrowserWindow, ipcMain, nativeImage, Tray, Menu, Notification, session, powerMonitor, clipboard, shell, screen } = require('electron');
 const path = require('path');
 const fs = require('fs');
 
@@ -253,19 +253,20 @@ function destroyTray() {
 }
 
 function getValidatedBounds(bounds) {
-  const { screen } = require('electron');
   if (bounds.x === undefined || bounds.y === undefined) return bounds;
-
-  const onScreen = screen.getAllDisplays().some(({ workArea: w }) =>
-    bounds.x < w.x + w.width &&
-    bounds.x + bounds.width > w.x &&
-    bounds.y < w.y + w.height &&
-    bounds.y + bounds.height > w.y
-  );
-
-  if (!onScreen) {
-    console.log('[Startup] Saved window position is off-screen — resetting to center');
-    return { width: bounds.width, height: bounds.height, x: undefined, y: undefined };
+  try {
+    const onScreen = screen.getAllDisplays().some(({ workArea: w }) =>
+      bounds.x < w.x + w.width &&
+      bounds.x + bounds.width > w.x &&
+      bounds.y < w.y + w.height &&
+      bounds.y + bounds.height > w.y
+    );
+    if (!onScreen) {
+      console.log('[Startup] Saved window position is off-screen — resetting to center');
+      return { width: bounds.width, height: bounds.height, x: undefined, y: undefined };
+    }
+  } catch (e) {
+    console.error('[Startup] Error checking screen bounds, using saved position:', e);
   }
   return bounds;
 }
