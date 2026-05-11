@@ -147,6 +147,27 @@ const store = {
   }
 };
 
+// Hardware acceleration must be disabled before app is ready
+if (config.settings && !config.settings.hardwareAcceleration) {
+  app.disableHardwareAcceleration();
+}
+
+// Single-instance lock must be acquired before app is ready
+const gotTheLock = app.requestSingleInstanceLock();
+if (!gotTheLock) {
+  console.log('[SingleInstance] Another instance is already running. Quitting.');
+  app.quit();
+}
+
+app.on('second-instance', (event, commandLine, workingDirectory) => {
+  console.log('[SingleInstance] Second instance blocked. Focusing existing window.');
+  if (mainWindow) {
+    if (mainWindow.isMinimized()) mainWindow.restore();
+    if (!mainWindow.isVisible()) mainWindow.show();
+    mainWindow.focus();
+  }
+});
+
 let mainWindow;
 let tray = null;
 
@@ -289,11 +310,6 @@ function createWindow() {
   const bounds = getValidatedBounds(store.get('windowBounds'));
   const settings = store.get('settings');
 
-  // Hardware acceleration setting
-  if (!settings.hardwareAcceleration) {
-    app.disableHardwareAcceleration();
-  }
-
   // Create system tray if enabled
   createTray(settings);
 
@@ -345,9 +361,10 @@ function createWindow() {
   mainWindow.on('resize', () => saveBounds());
   mainWindow.on('move', () => saveBounds());
 
-  mainWindow.once('ready-to-show', () => {
+  function showMainWindow() {
+    if (!mainWindow || mainWindow.isDestroyed() || mainWindow.isVisible()) return;
     if (settings.startMinimized && tray) {
-      console.log('Starting minimized to tray');
+      console.log('[Startup] Starting minimized to tray');
       if (tray.displayBalloon) {
         tray.displayBalloon({
           title: 'AllStar',
@@ -358,18 +375,32 @@ function createWindow() {
     } else {
       mainWindow.show();
     }
+  }
+
+  mainWindow.once('ready-to-show', () => {
+    console.log('[Startup] ready-to-show fired');
+    showMainWindow();
   });
 
-  // Fallback: if the window is still invisible after 5s and it wasn't intentionally
-  // hidden by startMinimized, force-show it so the app isn't stuck invisible.
+  // Secondary trigger: page finished loading
+  mainWindow.webContents.once('did-finish-load', () => {
+    console.log('[Startup] did-finish-load fired');
+    showMainWindow();
+  });
+
+  // Tertiary trigger: if load fails, show the window anyway so the user isn't stuck
+  mainWindow.webContents.on('did-fail-load', (event, errorCode, errorDescription) => {
+    console.error('[Startup] Page failed to load:', errorCode, errorDescription);
+    if (mainWindow && !mainWindow.isDestroyed() && !mainWindow.isVisible()) {
+      mainWindow.show();
+    }
+  });
+
+  // Last-resort fallback after 5s
   setTimeout(() => {
     if (mainWindow && !mainWindow.isDestroyed() && !mainWindow.isVisible()) {
-      if (settings.startMinimized && tray) {
-        console.log('[Startup] Window hidden by startMinimized — already notified via balloon');
-      } else {
-        console.log('[Startup] Fallback show triggered — window was not visible after 5s');
-        mainWindow.show();
-      }
+      console.log('[Startup] Fallback show triggered — window still not visible after 5s');
+      mainWindow.show();
     }
   }, 5000);
 
@@ -776,24 +807,7 @@ function setupAdBlocker() {
 
 // App lifecycle
 app.whenReady().then(() => {
-  // Prevent multiple instances from running
-  const gotTheLock = app.requestSingleInstanceLock();
-
-  if (!gotTheLock) {
-    console.log('[SingleInstance] Another instance is already running. Quitting this instance.');
-    app.quit();
-    return;
-  }
-
-  // Handle second instance attempts - focus the existing window
-  app.on('second-instance', (event, commandLine, workingDirectory) => {
-    console.log('[SingleInstance] Second instance blocked. Focusing existing window.');
-    if (mainWindow) {
-      if (mainWindow.isMinimized()) mainWindow.restore();
-      if (!mainWindow.isVisible()) mainWindow.show();
-      mainWindow.focus();
-    }
-  });
+  if (!gotTheLock) return; // already quitting — don't create a window
 
   // Setup ad blocker for all sessions
   setupAdBlocker();
