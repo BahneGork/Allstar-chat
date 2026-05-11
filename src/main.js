@@ -844,6 +844,18 @@ app.whenReady().then(() => {
     scheduleWindowChromeRestore('resume');
   });
 
+  // DWM drops the non-client frame when a window crosses a DPI boundary between
+  // monitors. Restore chrome whenever display metrics change or a display is removed.
+  screen.on('display-metrics-changed', (event, display, changedMetrics) => {
+    if (changedMetrics.includes('scaleFactor') || changedMetrics.includes('bounds')) {
+      scheduleWindowChromeRestore(`display-metrics-changed (${changedMetrics.join(', ')})`);
+    }
+  });
+
+  screen.on('display-removed', () => {
+    scheduleWindowChromeRestore('display-removed');
+  });
+
   function restoreWindowChrome() {
     if (!mainWindow || mainWindow.isDestroyed()) return;
 
