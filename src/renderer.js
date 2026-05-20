@@ -106,22 +106,8 @@ function switchTab(serviceId) {
     // Allow notifications and unmute audio for inactive tabs
     if (isActive) {
       blockWebviewNotifications(webview);
-      // Mute in-page sounds for active tab (you can see the messages already)
-      try {
-        webview.setAudioMuted(true);
-        console.log(`[${webview.dataset.serviceId}] Audio muted (active tab)`);
-      } catch (e) {
-        console.warn('Could not mute webview:', e.message);
-      }
     } else {
       allowWebviewNotifications(webview);
-      // Unmute for inactive tabs (so you hear notifications from background chats)
-      try {
-        webview.setAudioMuted(false);
-        console.log(`[${webview.dataset.serviceId}] Audio unmuted (inactive tab)`);
-      } catch (e) {
-        console.warn('Could not unmute webview:', e.message);
-      }
     }
   });
 
