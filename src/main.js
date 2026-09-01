@@ -795,14 +795,19 @@ function setupAdBlocker() {
   // Enable ad blocking for default session (used by child windows/popups)
   setupAdBlockerForSession(session.defaultSession, 'default session');
 
-  // Enable ad blocking for all service partitions
-  const services = config.services || [];
+  // Enable ad blocking for all service partitions except Wordle.
+  // NYT's ad/consent stack (doubleclick, googlesyndication, googletagmanager)
+  // appears to gate the game screen behind a callback from these requests -
+  // blocking them at the network level leaves Wordle on a blank grey screen
+  // after clicking Play. Wordle's own ad placeholders are still hidden via
+  // hideWordleAdPlaceholders() in renderer.js.
+  const services = (config.services || []).filter(service => service.id !== 'wordle');
   services.forEach(service => {
     const serviceSession = session.fromPartition(`persist:${service.id}`);
     setupAdBlockerForSession(serviceSession, service.name);
   });
 
-  console.log(`Ad blocker enabled for ${services.length + 1} sessions (default + all services)`);
+  console.log(`Ad blocker enabled for ${services.length + 1} sessions (default + all services except Wordle)`);
 }
 
 // App lifecycle
