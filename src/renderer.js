@@ -624,10 +624,12 @@ function hideWordleAdPlaceholders(webview) {
         // CSS to hide ad containers and buttons
         const style = document.createElement('style');
         style.textContent = \`
-          /* Hide known ad containers */
+          /* Hide known ad containers. NOTE: .pz-moment / #pz-moment is
+             deliberately excluded - that's NYT's ad interstitial, and it
+             contains the "Continue to Wordle" link that advances past it.
+             Hiding or removing it leaves a blank page with nothing to
+             click. skipAdInterstitial() below auto-clicks that link. */
           .pz-ad,
-          .pz-moment,
-          #pz-moment,
           button[aria-label*="dvertisement"],
           /* Hide empty divs that were ad containers */
           div[style*="min-height"]:empty,
@@ -686,8 +688,9 @@ function hideWordleAdPlaceholders(webview) {
               el.remove();
             });
 
-            // Look for and remove pz-moment and similar containers
-            const adContainers = document.querySelectorAll('.pz-moment, [class*="adContainer"], [class*="Ad-module"]');
+            // Look for and remove non-interstitial ad containers (pz-moment
+            // is intentionally excluded - see skipAdInterstitial())
+            const adContainers = document.querySelectorAll('[class*="adContainer"], [class*="Ad-module"]');
             console.log('[Wordle Ad Blocker] Found', adContainers.length, 'potential ad containers');
             adContainers.forEach(el => {
               // Don't remove if it contains the game or is part of it
@@ -701,15 +704,37 @@ function hideWordleAdPlaceholders(webview) {
           }
         }
 
+        // NYT shows a "pz-moment" ad interstitial with a "Continue to Wordle"
+        // link. Auto-click it so the game loads without user interaction.
+        function skipAdInterstitial() {
+          try {
+            const candidates = Array.from(document.querySelectorAll('a, button, [role="button"]'));
+            const continueLink = candidates.find(el => {
+              const text = el.textContent.toLowerCase();
+              const ariaLabel = el.getAttribute('aria-label')?.toLowerCase() || '';
+              return text.includes('continue to wordle') || ariaLabel.includes('continue to wordle');
+            });
+
+            if (continueLink) {
+              console.log('[Wordle Ad Blocker] Found "Continue to Wordle" link, clicking it');
+              continueLink.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true, view: window }));
+            }
+          } catch (skipError) {
+            console.error('[Wordle Ad Blocker] Error in skipAdInterstitial:', skipError);
+          }
+        }
+
         // Run immediately and after delays
         removeAdButtons();
-        setTimeout(removeAdButtons, 1500);
-        setTimeout(removeAdButtons, 3000);
-        setTimeout(removeAdButtons, 5000);
+        skipAdInterstitial();
+        setTimeout(() => { removeAdButtons(); skipAdInterstitial(); }, 1500);
+        setTimeout(() => { removeAdButtons(); skipAdInterstitial(); }, 3000);
+        setTimeout(() => { removeAdButtons(); skipAdInterstitial(); }, 5000);
 
         // Watch for new ad elements
         const observer = new MutationObserver(() => {
           removeAdButtons();
+          skipAdInterstitial();
         });
 
         observer.observe(document.body, {
