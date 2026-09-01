@@ -720,20 +720,52 @@ function hideWordleAdPlaceholders(webview) {
           }
         }
 
-        // NYT shows a "pz-moment" ad interstitial with a "Continue to Wordle"
-        // link. Auto-click it so the game loads without user interaction.
+        // NYT shows an AdInterstitial-module_modalOverlay ad interstitial
+        // with a "Continue to Wordle" link. Click it so the game loads
+        // without user interaction. The site's own routing does advance
+        // past the interstitial on click (confirmed: its GPT ad slot
+        // request switches from the interstitial's "intsl" slot to the
+        // real page's "ad-top" slot), but the modal overlay itself can be
+        // left showing on top of the now-rendered game underneath - likely
+        // because the ad vendor's dismiss handler ignores a script-
+        // dispatched (non-trusted) click. So if the modal is still present
+        // shortly after we click it, force it out of the DOM directly.
+        let interstitialRemovalScheduled = false;
+
         function skipAdInterstitial() {
           try {
-            const candidates = Array.from(document.querySelectorAll('a, button, [role="button"]'));
+            const modal = document.querySelector('[class*="AdInterstitial-module_modalOverlay"]');
+            if (!modal) return;
+
+            const candidates = Array.from(modal.querySelectorAll('a, button, [role="button"]'));
             const continueLink = candidates.find(el => {
               const text = el.textContent.toLowerCase();
               const ariaLabel = el.getAttribute('aria-label')?.toLowerCase() || '';
               return text.includes('continue to wordle') || ariaLabel.includes('continue to wordle');
             });
 
-            if (continueLink) {
+            if (continueLink && !continueLink.dataset.allstarClicked) {
+              continueLink.dataset.allstarClicked = 'true';
               console.log('[Wordle Ad Blocker] Found "Continue to Wordle" link, clicking it');
               continueLink.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true, view: window }));
+            }
+
+            if (!interstitialRemovalScheduled) {
+              interstitialRemovalScheduled = true;
+
+              // Grace period for the click to take effect / the ad to load
+              // and reveal its own Continue link. If the modal is still
+              // blocking the page after that, tear it out directly.
+              setTimeout(() => {
+                const stillThere = document.querySelector('[class*="AdInterstitial-module_modalOverlay"]');
+                if (stillThere) {
+                  console.log('[Wordle Ad Blocker] Interstitial still present, removing it directly');
+                  stillThere.remove();
+                  document.body.style.overflow = '';
+                  document.documentElement.style.overflow = '';
+                }
+                interstitialRemovalScheduled = false;
+              }, 2000);
             }
           } catch (skipError) {
             console.error('[Wordle Ad Blocker] Error in skipAdInterstitial:', skipError);
