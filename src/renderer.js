@@ -314,10 +314,10 @@ function createWebview(serviceId) {
   webview.addEventListener('dom-ready', () => {
     console.log(`${service.name} DOM ready`);
 
-    // Enable DevTools for Wordle to debug ad blocking (commented out for normal use)
-    // if (serviceId === 'wordle') {
-    //   webview.openDevTools();
-    // }
+    // Enable DevTools for Wordle to debug blank-page-on-Play issue
+    if (serviceId === 'wordle') {
+      webview.openDevTools();
+    }
 
     // Only start monitoring once per webview
     if (monitoringStarted[serviceId]) {
