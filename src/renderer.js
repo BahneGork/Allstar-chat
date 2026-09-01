@@ -683,21 +683,34 @@ function hideWordleAdPlaceholders(webview) {
               console.log('[Wordle Ad Blocker] No advertisement buttons found');
             }
 
-            // Remove containers with aria-label advertisement
+            // Remove containers with aria-label advertisement. NYT's ad
+            // interstitial modal (class "AdInterstitial-module_*") also
+            // matches this aria-label - it must NOT be removed, since it
+            // holds the "Continue to Wordle" link that skipAdInterstitial()
+            // clicks to advance past it. Removing it (as this used to do)
+            // deletes that link along with the ad slot div GPT renders
+            // into, breaking both the ad and the page's own way past it.
             const ariaElements = document.querySelectorAll('[aria-label*="dvertisement"]');
             console.log('[Wordle Ad Blocker] Found', ariaElements.length, 'aria-label ad elements');
             ariaElements.forEach(el => {
+              if (el.className.includes('AdInterstitial')) {
+                console.log('[Wordle Ad Blocker] Skipping ad interstitial modal (not removing):', el.className);
+                return;
+              }
               console.log('[Wordle Ad Blocker] Removing aria-label ad element:', el.tagName, el.className);
               el.remove();
             });
 
             // Look for and remove non-interstitial ad containers (pz-moment
-            // is intentionally excluded - see skipAdInterstitial())
+            // and AdInterstitial are intentionally excluded - see skipAdInterstitial())
             const adContainers = document.querySelectorAll('[class*="adContainer"], [class*="Ad-module"]');
             console.log('[Wordle Ad Blocker] Found', adContainers.length, 'potential ad containers');
             adContainers.forEach(el => {
-              // Don't remove if it contains the game or is part of it
-              if (!el.querySelector('#wordle-app-game') && !el.closest('#wordle-app-game') && !el.id.includes('game')) {
+              // Don't remove if it contains the game, or is part of the ad
+              // interstitial modal (its "Continue to Wordle" link and GPT's
+              // own ad slot div live inside it - see skipAdInterstitial())
+              if (!el.querySelector('#wordle-app-game') && !el.closest('#wordle-app-game')
+                  && !el.id.includes('game') && !el.closest('[class*="AdInterstitial"]')) {
                 console.log('[Wordle Ad Blocker] Removing ad container:', el.tagName, el.className || el.id);
                 el.remove();
               }
