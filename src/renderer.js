@@ -624,10 +624,7 @@ function hideWordleAdPlaceholders(webview) {
         // CSS to hide ad containers and buttons
         const style = document.createElement('style');
         style.textContent = \`
-          /* Hide ad containers that are left empty after blocking */
-          [class*="ad-"],
-          [id*="ad-"],
-          [data-testid*="ad"],
+          /* Hide known ad containers */
           .pz-ad,
           .pz-moment,
           #pz-moment,
@@ -669,24 +666,8 @@ function hideWordleAdPlaceholders(webview) {
                     parentId: btn.parentElement?.id
                   });
 
-                  // Remove the button and potentially its parent container
-                  const parent = btn.parentElement;
-                  const grandparent = parent?.parentElement;
-
                   btn.remove();
                   console.log('[Wordle Ad Blocker] Button removed');
-
-                  // If parent is now empty, remove it too
-                  if (parent && parent.children.length === 0) {
-                    console.log('[Wordle Ad Blocker] Removing empty parent:', parent.tagName, parent.className);
-                    parent.remove();
-
-                    // Check grandparent too
-                    if (grandparent && grandparent.children.length === 0) {
-                      console.log('[Wordle Ad Blocker] Removing empty grandparent:', grandparent.tagName, grandparent.className);
-                      grandparent.remove();
-                    }
-                  }
                 }
               } catch (btnError) {
                 console.error('[Wordle Ad Blocker] Error processing button:', btnError);
@@ -706,30 +687,13 @@ function hideWordleAdPlaceholders(webview) {
             });
 
             // Look for and remove pz-moment and similar containers
-            const adContainers = document.querySelectorAll('.pz-moment, [class*="ad-"], [id*="ad-"], [class*="adContainer"], [class*="Ad-module"]');
+            const adContainers = document.querySelectorAll('.pz-moment, [class*="adContainer"], [class*="Ad-module"]');
             console.log('[Wordle Ad Blocker] Found', adContainers.length, 'potential ad containers');
             adContainers.forEach(el => {
-              // Don't remove if it contains the game
-              if (!el.querySelector('#wordle-app-game') && !el.id.includes('game')) {
+              // Don't remove if it contains the game or is part of it
+              if (!el.querySelector('#wordle-app-game') && !el.closest('#wordle-app-game') && !el.id.includes('game')) {
                 console.log('[Wordle Ad Blocker] Removing ad container:', el.tagName, el.className || el.id);
-
-                // Also remove parent container (usually has min-height that causes spacing)
-                const parent = el.parentElement;
-                const grandparent = parent?.parentElement;
-
                 el.remove();
-
-                // Remove parent if it only has minimal content or becomes empty
-                if (parent && (parent.children.length === 0 || parent.children.length === 1)) {
-                  console.log('[Wordle Ad Blocker] Removing parent of ad container:', parent.tagName, parent.className || parent.id, 'children:', parent.children.length);
-                  parent.remove();
-
-                  // Also check grandparent
-                  if (grandparent && grandparent.children.length === 0) {
-                    console.log('[Wordle Ad Blocker] Removing grandparent too:', grandparent.tagName, grandparent.className || grandparent.id);
-                    grandparent.remove();
-                  }
-                }
               }
             });
           } catch (removeError) {
