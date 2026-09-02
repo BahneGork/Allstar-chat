@@ -306,6 +306,56 @@ function getValidatedBounds(bounds) {
   }
 }
 
+const GITHUB_REPO = 'BahneGork/Allstar-chat';
+
+// Compares dotted version strings numerically (e.g. "1.10.0" > "1.9.0").
+function compareVersions(a, b) {
+  const pa = a.split('.').map(Number);
+  const pb = b.split('.').map(Number);
+  for (let i = 0; i < Math.max(pa.length, pb.length); i++) {
+    const diff = (pa[i] || 0) - (pb[i] || 0);
+    if (diff !== 0) return diff;
+  }
+  return 0;
+}
+
+async function checkForUpdates() {
+  const currentVersion = app.getVersion();
+  try {
+    const res = await fetch(`https://api.github.com/repos/${GITHUB_REPO}/releases/latest`);
+    if (!res.ok) throw new Error(`GitHub API returned ${res.status}`);
+    const release = await res.json();
+    const latestVersion = (release.tag_name || '').replace(/^v/, '');
+
+    if (latestVersion && compareVersions(latestVersion, currentVersion) > 0) {
+      const { response } = await dialog.showMessageBox(mainWindow, {
+        type: 'info',
+        title: 'Update Available',
+        message: `AllStar v${latestVersion} is available (you have v${currentVersion}).`,
+        buttons: ['View Release', 'Later'],
+        defaultId: 0,
+        cancelId: 1
+      });
+      if (response === 0) {
+        shell.openExternal(release.html_url || `https://github.com/${GITHUB_REPO}/releases`);
+      }
+    } else {
+      dialog.showMessageBox(mainWindow, {
+        type: 'info',
+        title: 'No Updates Available',
+        message: `You're on the latest version (v${currentVersion}).`
+      });
+    }
+  } catch (e) {
+    console.error('Error checking for updates:', e);
+    dialog.showMessageBox(mainWindow, {
+      type: 'error',
+      title: 'Update Check Failed',
+      message: 'Could not check for updates. Please check your internet connection and try again.'
+    });
+  }
+}
+
 function createAppMenu() {
   const isMac = process.platform === 'darwin';
   const template = [
@@ -317,6 +367,15 @@ function createAppMenu() {
     {
       role: 'help',
       submenu: [
+        {
+          label: 'Check for Updates...',
+          click: () => checkForUpdates()
+        },
+        {
+          label: 'Releases on GitHub',
+          click: () => shell.openExternal(`https://github.com/${GITHUB_REPO}/releases`)
+        },
+        { type: 'separator' },
         {
           label: 'About AllStar',
           click: () => {
