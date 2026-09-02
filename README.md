@@ -110,7 +110,6 @@ Source design files are stored in the `design/` folder with version control. See
 
 ## Future Enhancements
 
-- Add more services (WhatsApp Web, Slack, Discord, etc.)
 - True tab suspension with WebContents API
 - Custom service URLs
 - Themes (light/dark mode)
