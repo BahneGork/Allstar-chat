@@ -1,4 +1,4 @@
-const { app, BrowserWindow, ipcMain, nativeImage, Tray, Menu, Notification, session, powerMonitor, clipboard, shell, screen } = require('electron');
+const { app, BrowserWindow, ipcMain, nativeImage, Tray, Menu, Notification, session, powerMonitor, clipboard, shell, screen, dialog } = require('electron');
 const path = require('path');
 const fs = require('fs');
 
@@ -304,6 +304,34 @@ function getValidatedBounds(bounds) {
     console.error('[Window] Error validating bounds:', e);
     return { width: bounds.width || 1200, height: bounds.height || 800 };
   }
+}
+
+function createAppMenu() {
+  const isMac = process.platform === 'darwin';
+  const template = [
+    ...(isMac ? [{ role: 'appMenu' }] : []),
+    { role: 'fileMenu' },
+    { role: 'editMenu' },
+    { role: 'viewMenu' },
+    { role: 'windowMenu' },
+    {
+      role: 'help',
+      submenu: [
+        {
+          label: 'About AllStar',
+          click: () => {
+            dialog.showMessageBox(mainWindow, {
+              type: 'info',
+              title: 'About AllStar',
+              message: 'AllStar',
+              detail: `Version ${app.getVersion()}\nElectron ${process.versions.electron}\nChromium ${process.versions.chrome}\nNode ${process.versions.node}`
+            });
+          }
+        }
+      ]
+    }
+  ];
+  Menu.setApplicationMenu(Menu.buildFromTemplate(template));
 }
 
 function createWindow() {
@@ -824,6 +852,7 @@ app.whenReady().then(() => {
   // Setup ad blocker for all sessions
   setupAdBlocker();
 
+  createAppMenu();
   createWindow();
 
   // Handle Windows sleep/wake to fix title bar disappearing.
