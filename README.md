@@ -110,7 +110,6 @@ Source design files are stored in the `design/` folder with version control. See
 
 ## Future Enhancements
 
-- True tab suspension with WebContents API
 - Custom service URLs
 - Themes (light/dark mode)
 - Keyboard shortcuts
