@@ -357,6 +357,13 @@ function createWindow() {
   mainWindow.loadFile(path.join(__dirname, 'index.html'));
   mainWindow.setTitle('AllStar v' + app.getVersion());
 
+  // index.html's <title> tag would otherwise overwrite the version-suffixed
+  // title above once the page finishes loading (Electron syncs window title
+  // to document title by default).
+  mainWindow.on('page-title-updated', (event) => {
+    event.preventDefault();
+  });
+
   // Save window bounds on resize/move
   mainWindow.on('resize', () => saveBounds());
   mainWindow.on('move', () => saveBounds());
