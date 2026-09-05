@@ -357,14 +357,6 @@ function createWebview(serviceId) {
     updateBadgeFromTitle(serviceId, e.title);
   });
 
-  webview.addEventListener('new-window', (e) => {
-    // Open in a new AllStar window
-    console.log(`[${serviceId}] Opening link in new window:`, e.url);
-    window.electron.openNewWindow(e.url).catch(err => {
-      console.error(`[${serviceId}] Failed to open new window:`, err);
-    });
-  });
-
   // Context menu for images (right-click -> Copy Image)
   webview.addEventListener('context-menu', (e) => {
     e.preventDefault();

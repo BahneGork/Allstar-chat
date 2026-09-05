@@ -441,6 +441,18 @@ function createWindow() {
     show: false
   });
 
+  // Intercept popups from every service <webview> at the source, since
+  // Electron auto-opens an unconfigured default window for them before the
+  // deprecated <webview> 'new-window' DOM event (handled in renderer.js) ever
+  // gets a chance to run. Denying here and creating our own window instead is
+  // what actually lets the popup reuse a matching service's session/UA.
+  mainWindow.webContents.on('did-attach-webview', (_event, webContents) => {
+    webContents.setWindowOpenHandler(({ url }) => {
+      createServiceAwareWindow(url);
+      return { action: 'deny' };
+    });
+  });
+
   mainWindow.loadFile(path.join(__dirname, 'index.html'));
   mainWindow.setTitle('AllStar v' + app.getVersion());
 
@@ -646,11 +658,12 @@ ipcMain.handle('copy-image-to-clipboard', async (_, imageDataUrl) => {
   }
 });
 
-ipcMain.handle('open-new-window', async (_, url) => {
+// Opens a URL in a new AllStar window, reusing a configured service's session
+// partition when the URL belongs to it (e.g. a Facebook link opened from
+// Google Chat carries Messenger's login instead of starting a fresh session).
+function createServiceAwareWindow(url) {
   console.log(`[Window] Opening new window for URL: ${url}`);
   try {
-    // Reuse a configured service's session partition if the URL belongs to it,
-    // so e.g. a Facebook link opened from Google Chat carries Messenger's login.
     let partition;
     try {
       const targetHost = new URL(url).hostname.replace(/^www\./, '');
@@ -702,7 +715,9 @@ ipcMain.handle('open-new-window', async (_, url) => {
     console.error('[Window] Failed to open new window:', error);
     return { success: false, error: error.message };
   }
-});
+}
+
+ipcMain.handle('open-new-window', async (_, url) => createServiceAwareWindow(url));
 
 ipcMain.handle('show-notification', (_, title, body, serviceId) => {
   const settings = store.get('settings');
