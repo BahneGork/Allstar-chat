@@ -658,10 +658,29 @@ ipcMain.handle('copy-image-to-clipboard', async (_, imageDataUrl) => {
   }
 });
 
+// Google Chat wraps outbound links in its own redirector
+// (https://www.google.com/url?...&url=<encoded target>&source=chat) before
+// they ever reach the destination site. Unwrap it so partition matching (and
+// the actual navigation) targets the real destination instead of google.com.
+function unwrapGoogleRedirect(url) {
+  try {
+    const parsed = new URL(url);
+    const host = parsed.hostname.replace(/^www\./, '');
+    if (host === 'google.com' && parsed.pathname === '/url') {
+      const target = parsed.searchParams.get('url') || parsed.searchParams.get('q');
+      if (target) return target;
+    }
+  } catch {
+    // Not a valid URL - fall through and let the caller's own parsing handle it
+  }
+  return url;
+}
+
 // Opens a URL in a new AllStar window, reusing a configured service's session
 // partition when the URL belongs to it (e.g. a Facebook link opened from
 // Google Chat carries Messenger's login instead of starting a fresh session).
-function createServiceAwareWindow(url) {
+function createServiceAwareWindow(rawUrl) {
+  const url = unwrapGoogleRedirect(rawUrl);
   console.log(`[Window] Opening new window for URL: ${url}`);
   try {
     let partition;
