@@ -649,6 +649,28 @@ ipcMain.handle('copy-image-to-clipboard', async (_, imageDataUrl) => {
 ipcMain.handle('open-new-window', async (_, url) => {
   console.log(`[Window] Opening new window for URL: ${url}`);
   try {
+    // Reuse a configured service's session partition if the URL belongs to it,
+    // so e.g. a Facebook link opened from Google Chat carries Messenger's login.
+    let partition;
+    try {
+      const targetHost = new URL(url).hostname.replace(/^www\./, '');
+      const services = store.get('services') || [];
+      const matchedService = services.find(s => {
+        try {
+          const serviceHost = new URL(s.url).hostname.replace(/^www\./, '');
+          return targetHost === serviceHost || targetHost.endsWith(`.${serviceHost}`);
+        } catch {
+          return false;
+        }
+      });
+      if (matchedService) {
+        partition = `persist:${matchedService.id}`;
+        console.log(`[Window] Reusing session partition for ${matchedService.name}: ${partition}`);
+      }
+    } catch (err) {
+      console.warn('[Window] Could not determine partition for URL:', err.message);
+    }
+
     // Create a new browser window
     const newWindow = new BrowserWindow({
       width: 1200,
@@ -656,7 +678,8 @@ ipcMain.handle('open-new-window', async (_, url) => {
       webPreferences: {
         nodeIntegration: false,
         contextIsolation: true,
-        sandbox: true
+        sandbox: true,
+        ...(partition ? { partition } : {})
       }
     });
 
