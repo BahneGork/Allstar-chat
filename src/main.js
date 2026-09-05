@@ -683,13 +683,6 @@ ipcMain.handle('open-new-window', async (_, url) => {
       }
     });
 
-    // Match the reused session's user agent (renderer.js appends this same
-    // suffix to service webviews) so Facebook doesn't see a UA mismatch on an
-    // otherwise-logged-in session and gate content behind a login wall.
-    if (partition) {
-      newWindow.webContents.setUserAgent(newWindow.webContents.getUserAgent() + ' AllStar/1.0');
-    }
-
     // Load the URL
     newWindow.loadURL(url);
 
@@ -934,12 +927,38 @@ function setupAdBlocker() {
   console.log(`Ad blocker enabled for ${services.length + 1} sessions (default + all services except Wordle)`);
 }
 
+// Strip the "Electron/x.y.z" token from a session's user agent. Sites like
+// Facebook treat that token as a sign of an embedded/automated browser and
+// gate sensitive content (e.g. share/Reels links) behind an extra login wall
+// even when valid session cookies are present. Applying this at the session
+// level (rather than per-webview or per-window) guarantees every webContents
+// sharing that session - including popups opened via open-new-window - sends
+// an identical, standard-looking Chrome UA.
+function stripElectronFromUserAgent(sessionInstance, label = 'session') {
+  const browserLikeUA = sessionInstance.getUserAgent().replace(/\s*Electron\/\S+/i, '');
+  sessionInstance.setUserAgent(browserLikeUA);
+  console.log(`[UserAgent] Stripped Electron token for ${label}`);
+}
+
+function setupUserAgents() {
+  stripElectronFromUserAgent(session.defaultSession, 'default session');
+
+  const services = config.services || [];
+  services.forEach(service => {
+    const serviceSession = session.fromPartition(`persist:${service.id}`);
+    stripElectronFromUserAgent(serviceSession, service.name);
+  });
+}
+
 // App lifecycle
 app.whenReady().then(() => {
   if (!gotTheLock) return; // already quitting — don't create a window
 
   // Setup ad blocker for all sessions
   setupAdBlocker();
+
+  // Strip the Electron UA token so sites don't gate content on embedded browsers
+  setupUserAgents();
 
   createAppMenu();
   createWindow();

@@ -328,13 +328,6 @@ function createWebview(serviceId) {
     console.log(`[${serviceId}] First DOM ready - starting monitoring`);
     monitoringStarted[serviceId] = true;
 
-    // Inject user agent to help with compatibility
-    try {
-      webview.setUserAgent(webview.getUserAgent() + ' AllStar/1.0');
-    } catch (e) {
-      console.warn(`[${serviceId}] Could not set user agent:`, e.message);
-    }
-
     // Test if JavaScript execution works
     webview.executeJavaScript('document.title').then(title => {
       console.log(`[${serviceId}] JavaScript execution works! Title: ${title}`);
