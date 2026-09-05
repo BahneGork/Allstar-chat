@@ -683,6 +683,13 @@ ipcMain.handle('open-new-window', async (_, url) => {
       }
     });
 
+    // Match the reused session's user agent (renderer.js appends this same
+    // suffix to service webviews) so Facebook doesn't see a UA mismatch on an
+    // otherwise-logged-in session and gate content behind a login wall.
+    if (partition) {
+      newWindow.webContents.setUserAgent(newWindow.webContents.getUserAgent() + ' AllStar/1.0');
+    }
+
     // Load the URL
     newWindow.loadURL(url);
 
