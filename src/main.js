@@ -446,7 +446,19 @@ function createWindow() {
   // deprecated <webview> 'new-window' DOM event (handled in renderer.js) ever
   // gets a chance to run. Denying here and creating our own window instead is
   // what actually lets the popup reuse a matching service's session/UA.
+  //
+  // Wordle is excluded: its NYT ad/consent stack relies on window.open()
+  // calls as part of its own ad-interstitial flow, and denying + redirecting
+  // those into a createServiceAwareWindow() popup (rather than letting
+  // Electron's default allowpopups behavior handle them, as before this
+  // interception existed) reintroduced Wordle's ad-interstitial blank-page
+  // bug. Wordle never needed the session-reuse feature this exists for -
+  // that's for links to other configured services (e.g. Facebook) opened
+  // from within a service like Google Chat - so it's safe to leave alone.
+  const wordleSession = session.fromPartition('persist:wordle');
   mainWindow.webContents.on('did-attach-webview', (_event, webContents) => {
+    if (webContents.session === wordleSession) return;
+
     webContents.setWindowOpenHandler(({ url }) => {
       createServiceAwareWindow(url);
       return { action: 'deny' };
