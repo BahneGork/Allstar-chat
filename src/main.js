@@ -676,6 +676,69 @@ function unwrapGoogleRedirect(url) {
   return url;
 }
 
+// NYT's Wordle shows an ad interstitial (AdInterstitial-module_modalOverlay)
+// with a "Continue to Wordle" link before the game loads. The site's own
+// routing advances past it on click, but the overlay itself can be left
+// covering the now-rendered game underneath (see hideWordleAdPlaceholders()
+// in renderer.js, which fixes this for the built-in Wordle tab). Popup
+// windows opened for Wordle links shared in chat load via loadURL() instead
+// of a webview, so they need the same fix applied directly to their webContents.
+function injectWordleAdSkip(webContents) {
+  webContents.executeJavaScript(`
+    (function() {
+      try {
+        let interstitialRemovalScheduled = false;
+
+        function skipAdInterstitial() {
+          try {
+            const modal = document.querySelector('[class*="AdInterstitial-module_modalOverlay"]');
+            if (!modal) return;
+
+            const candidates = Array.from(modal.querySelectorAll('a, button, [role="button"]'));
+            const continueLink = candidates.find(el => {
+              const text = el.textContent.toLowerCase();
+              const ariaLabel = el.getAttribute('aria-label')?.toLowerCase() || '';
+              return text.includes('continue to wordle') || ariaLabel.includes('continue to wordle');
+            });
+
+            if (continueLink && !continueLink.dataset.allstarClicked) {
+              continueLink.dataset.allstarClicked = 'true';
+              continueLink.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true, view: window }));
+            }
+
+            if (!interstitialRemovalScheduled) {
+              interstitialRemovalScheduled = true;
+              setTimeout(() => {
+                const stillThere = document.querySelector('[class*="AdInterstitial-module_modalOverlay"]');
+                if (stillThere) {
+                  stillThere.remove();
+                  document.body.style.overflow = '';
+                  document.documentElement.style.overflow = '';
+                }
+                interstitialRemovalScheduled = false;
+              }, 2000);
+            }
+          } catch (skipError) {
+            console.error('[Wordle Ad Blocker] Error in skipAdInterstitial:', skipError);
+          }
+        }
+
+        skipAdInterstitial();
+        setTimeout(skipAdInterstitial, 1500);
+        setTimeout(skipAdInterstitial, 3000);
+        setTimeout(skipAdInterstitial, 5000);
+
+        const observer = new MutationObserver(skipAdInterstitial);
+        observer.observe(document.body, { childList: true, subtree: true });
+      } catch (mainError) {
+        console.error('[Wordle Ad Blocker] Main error:', mainError);
+      }
+    })();
+  `).catch(e => {
+    console.error('[Window] Failed to inject Wordle ad-skip script:', e);
+  });
+}
+
 // Opens a URL in a new AllStar window, reusing a configured service's session
 // partition when the URL belongs to it (e.g. a Facebook link opened from
 // Google Chat carries Messenger's login instead of starting a fresh session).
@@ -684,10 +747,11 @@ function createServiceAwareWindow(rawUrl) {
   console.log(`[Window] Opening new window for URL: ${url}`);
   try {
     let partition;
+    let matchedService;
     try {
       const targetHost = new URL(url).hostname.replace(/^www\./, '');
       const services = store.get('services') || [];
-      const matchedService = services.find(s => {
+      matchedService = services.find(s => {
         try {
           const serviceHost = new URL(s.url).hostname.replace(/^www\./, '');
           return targetHost === serviceHost || targetHost.endsWith(`.${serviceHost}`);
@@ -717,6 +781,12 @@ function createServiceAwareWindow(rawUrl) {
 
     // Load the URL
     newWindow.loadURL(url);
+
+    if (matchedService && matchedService.id === 'wordle') {
+      newWindow.webContents.once('dom-ready', () => {
+        injectWordleAdSkip(newWindow.webContents);
+      });
+    }
 
     // Open links in this window in external browser
     newWindow.webContents.setWindowOpenHandler(({ url }) => {
