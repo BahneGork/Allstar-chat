@@ -190,6 +190,49 @@ function allowWebviewNotifications(webview) {
   }
 }
 
+// Clears a service's session data and reloads its webview from scratch.
+// Shared by the manual "Clear Session & Retry" button and the automatic
+// Wordle API-rejection failsafe (see recoverWordleSession below).
+async function clearSessionAndReload(serviceId, webview, service) {
+  console.log(`[${serviceId}] Clearing session and reloading...`);
+
+  try {
+    const result = await window.electron.clearServiceSession(serviceId);
+
+    if (result.success) {
+      console.log(`[${serviceId}] Session cleared successfully`);
+    } else {
+      console.warn(`[${serviceId}] Session clear returned error:`, result.error);
+    }
+
+    webview.clearHistory();
+
+    // Navigate to blank first, then back to service URL
+    await webview.loadURL('about:blank');
+    setTimeout(() => {
+      webview.src = service.url;
+    }, 500);
+  } catch (err) {
+    console.error(`[${serviceId}] Failed to clear session:`, err);
+    webview.reload();
+  }
+}
+
+// Called from the main process (via executeJavaScript, same pattern as
+// switchTab for notification clicks) when Wordle's own game-state API
+// starts rejecting requests with 403 - see main.js's setupWordleFailsafe().
+// That's NYT-side session/rate-limit blocking, not something the
+// ad-interstitial-skip script can fix, so the recovery is the same
+// clear-session-and-reload a user would otherwise have to trigger by hand.
+function recoverWordleSession() {
+  const webview = document.querySelector('webview[data-service-id="wordle"]');
+  const service = currentServices.find(s => s.id === 'wordle');
+  if (!webview || !service) return;
+
+  console.log('[Wordle Failsafe] Game API rejected - auto-clearing session');
+  clearSessionAndReload('wordle', webview, service);
+}
+
 // Create webview
 function createWebview(serviceId) {
   const service = currentServices.find(s => s.id === serviceId);
@@ -282,32 +325,9 @@ function createWebview(serviceId) {
     });
 
     // Clear session button - clear all session data and reload
-    document.getElementById(`clear-session-${serviceId}`).addEventListener('click', async () => {
+    document.getElementById(`clear-session-${serviceId}`).addEventListener('click', () => {
       errorOverlay.remove();
-      console.log(`[${serviceId}] Clearing session and reloading...`);
-
-      try {
-        // Clear session data via main process
-        const result = await window.electron.clearServiceSession(serviceId);
-
-        if (result.success) {
-          console.log(`[${serviceId}] Session cleared successfully`);
-        } else {
-          console.warn(`[${serviceId}] Session clear returned error:`, result.error);
-        }
-
-        // Clear webview history
-        webview.clearHistory();
-
-        // Navigate to blank first, then back to service URL
-        await webview.loadURL('about:blank');
-        setTimeout(() => {
-          webview.src = service.url;
-        }, 500);
-      } catch (err) {
-        console.error(`[${serviceId}] Failed to clear session:`, err);
-        webview.reload();
-      }
+      clearSessionAndReload(serviceId, webview, service);
     });
   });
 

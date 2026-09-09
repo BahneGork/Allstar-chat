@@ -1066,6 +1066,33 @@ function setupUserAgents() {
   });
 }
 
+// NYT's own game-state API (not an ad/tracking domain, so unaffected by the
+// ad blocker above) has been observed rejecting Wordle's session with 403 -
+// server-side blocking on NYT's end, unrelated to anything this app does.
+// The only known recovery is the same "Clear Session & Retry" a user would
+// otherwise have to notice and click through manually, so trigger it
+// automatically when this happens. Cooldown avoids a clear/reload loop if
+// NYT keeps rejecting even after a fresh session.
+function setupWordleFailsafe() {
+  const wordleSession = session.fromPartition('persist:wordle');
+  const COOLDOWN_MS = 5 * 60 * 1000;
+  let lastTriggered = 0;
+
+  wordleSession.webRequest.onCompleted((details) => {
+    if (details.statusCode !== 403) return;
+    if (!/\/svc\/games\/(settings|state)\/wordleV2/.test(details.url)) return;
+
+    const now = Date.now();
+    if (now - lastTriggered < COOLDOWN_MS) return;
+    lastTriggered = now;
+
+    console.log('[Wordle Failsafe] Game API rejected with 403, auto-clearing session:', details.url);
+    if (mainWindow) {
+      mainWindow.webContents.executeJavaScript('window.recoverWordleSession && window.recoverWordleSession();').catch(() => {});
+    }
+  });
+}
+
 // App lifecycle
 app.whenReady().then(() => {
   if (!gotTheLock) return; // already quitting — don't create a window
@@ -1075,6 +1102,9 @@ app.whenReady().then(() => {
 
   // Strip the Electron UA token so sites don't gate content on embedded browsers
   setupUserAgents();
+
+  // Auto-recover Wordle's session if NYT's game API starts rejecting it
+  setupWordleFailsafe();
 
   createAppMenu();
   createWindow();
