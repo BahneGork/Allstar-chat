@@ -699,8 +699,6 @@ function injectWordleAdSkip(webContents) {
   webContents.executeJavaScript(`
     (function() {
       try {
-        let interstitialRemovalScheduled = false;
-
         function skipAdInterstitial() {
           try {
             const modal = document.querySelector('[class*="AdInterstitial-module_modalOverlay"]');
@@ -716,10 +714,9 @@ function injectWordleAdSkip(webContents) {
             if (continueLink && !continueLink.dataset.allstarClicked) {
               continueLink.dataset.allstarClicked = 'true';
               continueLink.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true, view: window }));
-            }
 
-            if (!interstitialRemovalScheduled) {
-              interstitialRemovalScheduled = true;
+              // Only force-remove after the click; removing the modal before
+              // the Continue link appears leaves a blank page.
               setTimeout(() => {
                 const stillThere = document.querySelector('[class*="AdInterstitial-module_modalOverlay"]');
                 if (stillThere) {
@@ -727,7 +724,6 @@ function injectWordleAdSkip(webContents) {
                   document.body.style.overflow = '';
                   document.documentElement.style.overflow = '';
                 }
-                interstitialRemovalScheduled = false;
               }, 2000);
             }
           } catch (skipError) {

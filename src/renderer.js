@@ -725,8 +725,11 @@ function hideWordleAdPlaceholders(webview) {
         // because the ad vendor's dismiss handler ignores a script-
         // dispatched (non-trusted) click. So if the modal is still present
         // shortly after we click it, force it out of the DOM directly.
-        let interstitialRemovalScheduled = false;
-
+        //
+        // The force-removal must only start once the link has actually been
+        // clicked. The ad vendor can be slow to reveal the Continue link; if
+        // the modal is torn out before the click, the game was never routed
+        // in and the page is left blank.
         function skipAdInterstitial() {
           try {
             const modal = document.querySelector('[class*="AdInterstitial-module_modalOverlay"]');
@@ -743,23 +746,17 @@ function hideWordleAdPlaceholders(webview) {
               continueLink.dataset.allstarClicked = 'true';
               console.log('[Wordle Ad Blocker] Found "Continue to Wordle" link, clicking it');
               continueLink.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true, view: window }));
-            }
 
-            if (!interstitialRemovalScheduled) {
-              interstitialRemovalScheduled = true;
-
-              // Grace period for the click to take effect / the ad to load
-              // and reveal its own Continue link. If the modal is still
-              // blocking the page after that, tear it out directly.
+              // Grace period for the click to take effect. If the modal is
+              // still blocking the page after that, tear it out directly.
               setTimeout(() => {
                 const stillThere = document.querySelector('[class*="AdInterstitial-module_modalOverlay"]');
                 if (stillThere) {
-                  console.log('[Wordle Ad Blocker] Interstitial still present, removing it directly');
+                  console.log('[Wordle Ad Blocker] Interstitial still present after click, removing it directly');
                   stillThere.remove();
                   document.body.style.overflow = '';
                   document.documentElement.style.overflow = '';
                 }
-                interstitialRemovalScheduled = false;
               }, 2000);
             }
           } catch (skipError) {
