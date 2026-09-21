@@ -206,16 +206,26 @@ async function clearSessionAndReload(serviceId, webview, service) {
     }
 
     webview.clearHistory();
-
-    // Navigate to blank first, then back to service URL
-    await webview.loadURL('about:blank');
-    setTimeout(() => {
-      webview.src = service.url;
-    }, 500);
   } catch (err) {
     console.error(`[${serviceId}] Failed to clear session:`, err);
-    webview.reload();
   }
+
+  // Navigate to blank first, then back to service URL. Loading about:blank
+  // while the original load is still in flight rejects with ERR_ABORTED (-3);
+  // that must not skip the reload below, or the webview is left on about:blank.
+  try {
+    await webview.loadURL('about:blank');
+  } catch (err) {
+    console.log(`[${serviceId}] about:blank navigation rejected (expected if a load was in flight):`, err.message);
+  }
+
+  setTimeout(() => {
+    try {
+      webview.loadURL(service.url).catch(() => {});
+    } catch {
+      webview.src = service.url;
+    }
+  }, 500);
 }
 
 // Called from the main process (via executeJavaScript, same pattern as
@@ -334,11 +344,10 @@ function createWebview(serviceId) {
   webview.addEventListener('dom-ready', () => {
     console.log(`${service.name} DOM ready`);
 
-    // Temporarily re-enabled to capture console output for the recurring
-    // blank-page bug - comment out again once diagnosed.
-    if (serviceId === 'wordle') {
-      webview.openDevTools();
-    }
+    // Enable DevTools for Wordle to debug ad blocking (commented out for normal use)
+    // if (serviceId === 'wordle') {
+    //   webview.openDevTools();
+    // }
 
     // Only start monitoring once per webview
     if (monitoringStarted[serviceId]) {
